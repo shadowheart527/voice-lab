@@ -84,8 +84,9 @@ def run_all(name):
         m["nframes"] = len(t)
         runs.append(m)
 
+    # Only the mir-1k_g7 checkpoint loads under pesto 2.0.1; the bundled legacy
+    # `mir-1k` checkpoint raises a state_dict mismatch against the 2.x model.
     timed("PESTO mir-1k_g7", lambda: T.track_pesto(x, fs, HOP_MS, "mir-1k_g7"), 40.0)
-    timed("PESTO mir-1k", lambda: T.track_pesto(x, fs, HOP_MS, "mir-1k"), 40.0)
     timed("engine MPM (40ms)",
           lambda: T.track_engine(x, fs, HOP_MS, 40.0, "mpm"), 40.0)
     timed("engine YIN (40ms)",

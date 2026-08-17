@@ -150,8 +150,15 @@ class GenderProbe:
         window_s: float = DEFAULT_WINDOW_S,
         hop_s: float = DEFAULT_HOP_S,
         min_rms_dbfs: float = DEFAULT_MIN_RMS_DBFS,
-        batch_size: int = 16,
+        batch_size: int = 1,
     ) -> None:
+        # batch_size defaults to 1 deliberately. The int8 graph uses dynamic
+        # quantisation, which derives activation scales per tensor over whatever
+        # is in the batch, so a window's score depends on its neighbours: on the
+        # reference clips, batching 16 shifts clip means by up to ~0.01 against
+        # single-window inference. One window at a time is both reproducible and
+        # what a browser doing live analysis will do, and for this graph it is
+        # also the fastest option. Raise it only for offline fp32 work.
         self.window = int(round(window_s * SAMPLE_RATE))
         self.hop = int(round(hop_s * SAMPLE_RATE))
         self.min_rms_dbfs = min_rms_dbfs
