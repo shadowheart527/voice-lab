@@ -25,85 +25,54 @@ broken.
 GitHub Pages and `tailscale serve` — along with what each one implies for a
 private repository and for the AGPL.
 
-## Why a reimplementation rather than a WASM port
+## One engine, not two
 
-The earlier assessment argued for compiling the C++ engine to WebAssembly, on
-the grounds that a rewrite would reopen weeks of calibration work. That was the
-right concern and the wrong conclusion, for one reason: the calibration is
-reproducible on demand. `browser/tools/validate-dsp.mjs` re-runs the entire
-calibration procedure against the same ground truth, so a fresh implementation
-can be *measured* rather than trusted. Given that, a dependency-free JavaScript
-implementation avoids an Emscripten toolchain, an FFTW substitution and the
-extraction of an analysis core from a Qt-entangled codebase, and it stays
-readable and debuggable.
+The browser runs **the desktop engine's own analysis code**, compiled to
+WebAssembly: the same RAPT pitch solver, the same Burg linear prediction and
+FilteredLP formant solver, the same spectral-tilt measure, the same gender model
+with the same compiled-in calibration table, linked against the same FFTW and
+libsamplerate rather than substitutes. `engine/src/wasm/voicelab_wasm.cpp` is a
+thin C API over that core; the browser owns buffering and scheduling, which its
+Worker already did.
 
-The validation vindicated the caution, though: it immediately caught two real
-bugs (see below), either of which would have shipped silently under a
-"port it and assume it works" approach.
+Verified on the synthetic weight pair: WebAssembly reads **-10.50 and -19.64
+dB/oct** where the native desktop build reads **-10.49 and -19.64**, and the
+built, deployable site shows the same through the full worklet and worker path.
+There is no second implementation to drift and no second set of calibration
+constants.
 
-## What the analysis does
+This reverses an earlier decision recorded here. The first browser build was an
+independent JavaScript implementation, argued for on the grounds that the
+calibration was reproducible on demand so a rewrite could be *measured* rather
+than trusted. That was true, and the measuring did catch two real bugs. But
+maintaining two implementations meant the same defect had to be found and fixed
+twice, which is exactly what happened with the vocal-weight measure. Sharing one
+core removes the failure mode rather than testing for it.
 
-Deliberately the same chain as the desktop engine:
-
-| Quantity | Method |
-|---|---|
-| Pitch | YIN with parabolic interpolation |
-| Formants | 200 Hz pre-emphasis → Gaussian window → resample to 11 kHz → Burg LPC (order 12) → Durand-Kerner roots → radius and bandwidth criteria |
-| Vocal weight | Harmonic level in a fixed low band vs a fixed high band, SNR-gated |
-| Scores | The calibrated gender model, ported from `genderscore.h` |
-
-Smoothing windows match the desktop HUD (0.35 s median pitch, 1 s formants,
-2 s for the gender read) so numbers are directly comparable across the two.
-
-## Calibration is re-derived, not inherited
-
-Calibration constants encode a *particular tracker's* measurement biases, so
-they do not transfer between implementations. `tools/validate-dsp.mjs` runs the
-browser tracker over acousticgender.space's 21 reference clips at the phoneme
-midpoints where the original pipeline recorded praat's formants, fits the
-tracker→praat unit maps with the same robust procedure the desktop calibration
-used, checks the result leave-one-clip-out against the official per-clip
-medians, and derives the vocal-weight anchors from the TransVoiceLessons
-light/heavy demonstrations. It writes `src/dsp/calibration.js`.
+### Building it
 
 ```sh
-node tools/validate-dsp.mjs <refclips-dir> <tvl-demos-dir>
+scripts/build-fftw-wasm.sh     # once: cross-compile FFTW for wasm32
+scripts/build-wasm.sh          # the core -> browser/wasm/
 ```
 
-Measured on the current implementation:
+Four things had to give way, all small and all in the repository now: `QMutex`
+around FFTW plan creation became `std::mutex`; the vocal-weight measure moved out
+of the Qt-bound pitch processor into `src/analysis/weight/`; FFTW needs a host
+triple its `config.sub` recognises, because that file predates Emscripten;
+libsamplerate is compiled directly, because its CMake refuses to cross-compile.
+DeepFormants (libtorch) and `gci/sigma` (armadillo) are excluded, neither having
+a browser equivalent nor being on this path.
 
-- Pitch vs praat: **6.5 Hz mean absolute error** (desktop engine: 6.4 Hz)
-- Resonance scale vs official clip medians: **0.066 MAE**, leave-one-clip-out
-  (desktop engine: 0.073, so slightly better)
+`browser/wasm/` is committed rather than built in CI, because GitHub Pages cannot
+cross-compile Emscripten, and because it guarantees the deployed site is the
+artifact that was tested.
 
-## Two bugs the validator caught
+### The JavaScript implementation
 
-Worth recording, because both were invisible to inspection and obvious to
-measurement.
-
-**An aliasing bug in the Burg recursion.** The backward prediction error array
-was being updated in place while still being read for later indices, so the
-recursion fed on its own partially-updated state. LPC coefficients came out
-around −300 where they should be order 1, and formant extraction returned
-essentially nothing. Fixed by snapshotting both error arrays per iteration.
-
-**An inverted vocal-weight measure — in both engines.** The original approach
-collected every harmonic that cleared the noise floor and fitted a slope across
-them. A light voice's upper harmonics fall below the floor, so its slope ends
-up fitted only across the surviving low harmonics, where the F1 resonance is
-*rising*, while a heavy voice is fitted across the whole falling spectrum. The
-two are measured over different frequency ranges and are not comparable: on a
-synthetic pair with known source tilts, the light half was reported as flatter
-(heavier) than the heavy half. This is the same defect that made a light,
-breathy voice read as heavy in real use.
-
-Replaced with fixed low (190–900 Hz) and high (1500–3200 Hz) comparison bands,
-so every voice is measured on the same ruler, and a voice with nothing in the
-high band floors out as *very light* rather than returning no reading. Verified
-three ways: clean and noisy synthetic pairs now give identical answers, the
-TransVoiceLessons light/heavy demonstrations separate correctly, and the C++
-and JavaScript implementations agree to within 0.2 dB/oct on the same signal.
-The fix was ported back into the desktop engine.
+It still lives in `browser/src/dsp/`. It is no longer the engine; it is an
+independent second opinion for `tools/validate-dsp.mjs`, which is worth keeping
+precisely because it was written from the same specification by different means.
 
 ## Session recording
 

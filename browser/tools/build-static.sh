@@ -30,6 +30,16 @@ mkdir -p "$OUT"
 printf '\n=== app\n'
 cp "$ROOT/browser/index.html" "$OUT/"
 cp -r "$ROOT/browser/src" "$OUT/"
+
+# The shared analysis core, compiled from the desktop engine's own sources.
+# Without this the analysis worker has nothing to import and the page loads but
+# never measures anything.
+if [ -f "$ROOT/browser/wasm/voicelab.wasm" ]; then
+    cp -r "$ROOT/browser/wasm" "$OUT/"
+else
+    echo "ERROR: browser/wasm/voicelab.wasm missing; run scripts/build-wasm.sh" >&2
+    exit 1
+fi
 say "index.html, src/"
 
 printf '\n=== onnxruntime-web (vendor/)\n'
