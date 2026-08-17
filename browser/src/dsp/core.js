@@ -285,60 +285,83 @@ export function formants(frame, sampleRate, opts = {}) {
  * voices that matter, and the uncorrected slope differs from the ideal by a
  * near-constant offset the anchors absorb.
  */
-export function spectralTilt(frame, sampleRate, f0, fft) {
+export function spectralTilt(frame, sampleRate, f0, fft, opts = {}) {
     if (!(f0 > 40)) return null;
+
+    // Fixed comparison bands, NOT "whatever harmonics happen to survive".
+    //
+    // The obvious implementation (collect every harmonic that clears the noise
+    // floor, fit a slope) is subtly wrong and measurably inverts on real
+    // signals: a light voice's upper harmonics fall below the floor, so its
+    // slope ends up fitted only across the low end, where the F1 resonance is
+    // *rising*, while a heavy voice is fitted across the whole falling
+    // spectrum. The two are then measured over different frequency ranges and
+    // are not comparable. Verified on a synthetic pair with known source
+    // tilts: the harmonic-fit version reported the light half as FLATTER than
+    // the heavy half, exactly backwards.
+    //
+    // Comparing fixed low and high bands keeps every voice on the same ruler,
+    // and a light voice having nothing in the high band is the signal itself,
+    // not missing data: it floors out as "very light" rather than dropping to
+    // no reading.
+    const LO_BAND = opts.loBand ?? [190, 900];
+    const HI_BAND = opts.hiBand ?? [1500, 3200];
+    const FLOOR_TILT = opts.floorTilt ?? -20;
 
     const mag = fft(frame);
     const nfft = (mag.length - 1) * 2;
     const binHz = sampleRate / nfft;
+    const nyq = sampleRate / 2;
+    if (HI_BAND[0] > nyq - 100) return null;
 
-    const fks = [], amps = [];
-    for (let k = 1; k <= 14; k++) {
-        const fk = k * f0;
-        if (fk >= Math.min(3200, sampleRate / 2 - 100)) break;
-        if (fk < 160) continue; // recording highpass region corrupts amplitudes
-
+    // Harmonic peak amplitude and the local inter-harmonic noise floor.
+    const harmonic = (fk) => {
         const lo = Math.max(1, Math.floor((fk - 0.35 * f0) / binHz));
         const hi = Math.min(mag.length - 1, Math.floor((fk + 0.35 * f0) / binHz) + 1);
-        if (hi <= lo) continue;
+        if (hi <= lo) return null;
+        let peak = 0;
+        for (let b = lo; b <= hi; b++) if (mag[b] > peak) peak = mag[b];
+        if (peak <= 1e-12) return null;
 
-        let peak = 0, peakF = fk;
-        for (let b = lo; b <= hi; b++) {
-            if (mag[b] > peak) { peak = mag[b]; peakF = b * binHz; }
-        }
-        if (peak <= 1e-12) continue;
-
-        // Noise floor from the valleys either side.
         let floor = 0, count = 0;
         for (const half of [fk - 0.5 * f0, fk + 0.5 * f0]) {
             const flo = Math.max(1, Math.floor((half - 0.15 * f0) / binHz));
             const fhi = Math.min(mag.length - 1, Math.floor((half + 0.15 * f0) / binHz) + 1);
             for (let b = flo; b <= fhi; b++) { floor += mag[b]; count++; }
         }
-        if (count > 0) {
-            floor /= count;
-            if (peak < 3.2 * floor) continue; // < ~10 dB over the valley: not a harmonic
+        const clean = count > 0 ? peak >= 3.2 * (floor / count) : true;
+        return { db: 20 * Math.log10(peak), clean };
+    };
+
+    const bandLevel = (band) => {
+        const vals = [];
+        for (let k = 1; k <= 40; k++) {
+            const fk = k * f0;
+            if (fk > band[1]) break;
+            if (fk < band[0]) continue;
+            const h = harmonic(fk);
+            if (h && h.clean) vals.push(h.db);
         }
+        if (!vals.length) return null;
+        // Mean of the strongest few: robust to one weak harmonic sitting in a
+        // spectral valley between formants.
+        vals.sort((a, b) => b - a);
+        const take = Math.max(1, Math.min(3, vals.length));
+        let sum = 0;
+        for (let i = 0; i < take; i++) sum += vals[i];
+        return sum / take;
+    };
 
-        fks.push(peakF);
-        amps.push(20 * Math.log10(peak));
-    }
+    const lo = bandLevel(LO_BAND);
+    if (lo === null) return null;          // no usable voice at all
+    const hi = bandLevel(HI_BAND);
 
-    if (fks.length < 3) return null;
+    const octaves = Math.log2(
+        ((HI_BAND[0] + HI_BAND[1]) / 2) / ((LO_BAND[0] + LO_BAND[1]) / 2));
 
-    // Theil-Sen: median of pairwise slopes in dB per octave.
-    const slopes = [];
-    for (let i = 0; i < fks.length; i++) {
-        for (let j = i + 1; j < fks.length; j++) {
-            const dx = Math.log2(fks[j] / fks[i]);
-            if (Math.abs(dx) > 1e-9) slopes.push((amps[j] - amps[i]) / dx);
-        }
-    }
-    if (!slopes.length) return null;
-    slopes.sort((a, b) => a - b);
-    const slope = slopes[slopes.length >> 1];
-    if (slope < -40 || slope > 15) return null;
-    return slope;
+    if (hi === null) return FLOOR_TILT;    // nothing up top: genuinely light
+    const slope = (hi - lo) / octaves;
+    return Math.max(-40, Math.min(15, slope));
 }
 
 // ------------------------------------------------------------ tiny real FFT

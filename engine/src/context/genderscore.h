@@ -75,13 +75,13 @@ namespace Main::GenderScore {
 
     // Vocal weight percept (TVL sense) from the uncorrected harmonic tilt
     // (Theil-Sen, SNR-gated): 0 = light (steep roll-off), 1 = heavy (flat).
-    // Anchored against the TVL video's own labeled demonstrations: their
+    // Anchored against the TVL video's labelled demonstrations: their
     // "light sounds" measure ~-9 dB/oct (maps to ~0.19) and the "heavy sound"
     // ~-3.8 (~0.84). Recording chains shift this scale a few dB/oct either
     // way, so treat the anchors as a starting point tunable per setup.
     inline double weightP(double tiltDbOct)
     {
-        return std::clamp((tiltDbOct + 10.5) / 8.0, 0.0, 1.0);
+        return std::clamp((tiltDbOct + 14.82) / 9.16, 0.0, 1.0);
     }
 
 }

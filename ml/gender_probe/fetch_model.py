@@ -5,6 +5,7 @@ Writes into ml/models/ (gitignored):
 
     ecapa_gender.safetensors   upstream weights, cached copy
     ecapa_gender_fp32.onnx     full graph, audio in -> 2 logits out
+    ecapa_gender_int8.onnx     weight-only int8, for onnxruntime-web
 
 Along the way it checks two things that would otherwise fail silently:
 
@@ -34,6 +35,7 @@ else:
 REPO_ID = "JaesungHuh/voice-gender-classifier"
 MODELS_DIR = pathlib.Path(__file__).resolve().parent.parent / "models"
 ONNX_PATH = MODELS_DIR / "ecapa_gender_fp32.onnx"
+INT8_PATH = MODELS_DIR / "ecapa_gender_int8.onnx"
 WEIGHTS_PATH = MODELS_DIR / "ecapa_gender.safetensors"
 OPSET = 17
 

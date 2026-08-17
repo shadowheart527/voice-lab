@@ -13,6 +13,6 @@ export const WEB_CALIBRATION = {
     formantAnchors: [[420.0, 550.0], [1350.0, 1650.0], [2700.0, 3150.0]],
     praatMapF1: [0.876993, 60.9958],
     praatMapF2: [0.620765, 572.3370],
-    weight: { light: -7.02, heavy: -3.23 },
+    weight: { light: -14.82, heavy: -5.66 },
     provisional: false,
 };

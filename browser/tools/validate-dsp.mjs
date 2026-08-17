@@ -239,10 +239,18 @@ if (DEMODIR && fs.existsSync(DEMODIR)) {
             console.log(`  ${name.padEnd(6)} ${weight[name].toFixed(2)} dB/oct (n=${v.length})`);
         }
     }
-    // Keep light < heavy; fall back if the demos disagree.
     if (!(weight.heavy > weight.light)) {
         console.log('  demos did not separate; keeping provisional anchors');
         weight = { light: -10.5, heavy: -2.5 };
+    } else {
+        // The demonstrations are pedagogical examples of "light" and "heavy",
+        // not the extremes of what a voice can do, so the scale is widened
+        // around them. Mapping them to exactly 0 and 1 would make everything
+        // outside their range clip, and the scale hair-trigger sensitive.
+        const mid = (weight.light + weight.heavy) / 2;
+        const halfSpan = Math.max(4.5, (weight.heavy - weight.light) * 1.25);
+        weight = { light: mid - halfSpan, heavy: mid + halfSpan };
+        console.log(`  widened to light ${weight.light.toFixed(2)} / heavy ${weight.heavy.toFixed(2)}`);
     }
 }
 

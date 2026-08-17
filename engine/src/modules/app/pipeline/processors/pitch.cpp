@@ -84,110 +84,97 @@ std::optional<double> Pitch::computeSpectralTilt(
     const int nOut = fft.getOutputLength();
     const double binHz = sampleRate / kNfft;
 
-    // No formant correction. Correcting with the TRUE tract envelope is exact
-    // (verified on synthetics), but live we only have the tracked formants,
-    // and those degrade precisely on the light voices that matter most --
-    // little energy above 1 kHz leaves LPC fitting noise, and a wrong formant
-    // makes the correction inject large slope errors. Measured across the
-    // reference speakers, the uncorrected Theil-Sen slope tracks the
-    // true-corrected one with a consistent +7 dB/oct offset (sd 1.5), i.e. it
-    // preserves ordering and spread; the offset is absorbed by the weightP
-    // anchors. Robustness beats exactness here.
-
-    // Harmonic peak amplitudes: skip below 160 Hz (recording highpass region),
-    // cap at 3.2 kHz / 14 harmonics.
+    // Fixed comparison bands rather than "whatever harmonics survive".
     //
-    // SNR gate: a peak only counts as a harmonic if it clears the local noise
-    // floor (the between-harmonics valley) by a margin. Without this, a light
-    // or breathy voice whose upper harmonics sink below the room/mic noise
-    // floor gets the noise measured as "harmonics", the slope flattens, and
-    // light voices read as heavy. (Exactly what a webcam mic in a normal room
-    // produced in practice; the noise-free synthetic validation never saw it.)
-    rpm::vector<double> octs, amps;
-    double firstF = -1.0;
-    for (int k = 1; k <= 14; ++k) {
-        const double fk = k * f0;
-        if (fk >= std::min(3200.0, sampleRate / 2.0 - 100.0)) {
-            break;
-        }
-        if (fk < 160.0) {
-            continue;
-        }
+    // The earlier implementation collected every harmonic clearing the noise
+    // floor and fitted a slope across them. That is subtly wrong: a light
+    // voice's upper harmonics fall below the floor, so its slope gets fitted
+    // only across the low end where the F1 resonance is RISING, while a heavy
+    // voice is fitted across the whole falling spectrum. The two are measured
+    // over different frequency ranges and are not comparable. On a synthetic
+    // pair with known source tilts it reported the light half as flatter than
+    // the heavy half, exactly backwards, which is what made light voices read
+    // heavy in practice.
+    //
+    // Comparing fixed low and high bands puts every voice on the same ruler.
+    // A light voice having nothing in the high band is the signal itself, not
+    // missing data, so it floors out as "very light" instead of no reading.
+    // Verified: clean and noisy synthetic pairs now give identical answers,
+    // and the TransVoiceLessons light/heavy demonstrations separate correctly.
+    constexpr double kLoBand[2] = { 190.0, 900.0 };
+    constexpr double kHiBand[2] = { 1500.0, 3200.0 };
+    constexpr double kFloorTilt = -20.0;
+
+    if (kHiBand[0] > sampleRate / 2.0 - 100.0) {
+        return std::nullopt;
+    }
+
+    // Harmonic peak level in dB, and whether it clears the local
+    // inter-harmonic noise floor by ~10 dB.
+    auto harmonic = [&](double fk, bool *clean) -> double {
         const int lo = std::max(1, (int) ((fk - 0.35 * f0) / binHz));
         const int hi = std::min(nOut - 1, (int) ((fk + 0.35 * f0) / binHz) + 1);
         if (hi <= lo) {
-            continue;
+            return -1e9;
         }
-        double best = 0.0;
-        double bestF = fk;
+        double peak = 0.0;
         for (int b = lo; b <= hi; ++b) {
-            const double m = std::abs(fft.output(b));
-            if (m > best) {
-                best = m;
-                bestF = b * binHz;
-            }
+            peak = std::max(peak, std::abs(fft.output(b)));
         }
-        if (best <= 1e-12) {
-            continue;
+        if (peak <= 1e-12) {
+            return -1e9;
         }
-
-        // Noise floor at the inter-harmonic valley around (k +- 1/2) * f0.
-        double floorMag = 0.0;
+        double floorSum = 0.0;
         int floorN = 0;
         for (double half : { fk - 0.5 * f0, fk + 0.5 * f0 }) {
             const int flo = std::max(1, (int) ((half - 0.15 * f0) / binHz));
             const int fhi = std::min(nOut - 1, (int) ((half + 0.15 * f0) / binHz) + 1);
             for (int b = flo; b <= fhi; ++b) {
-                floorMag += std::abs(fft.output(b));
+                floorSum += std::abs(fft.output(b));
                 ++floorN;
             }
         }
-        if (floorN > 0) {
-            floorMag /= floorN;
-            // < ~10 dB above the valley: not a harmonic. The peak is a max over
-            // ~10 bins, so noise alone clears a 6 dB bar too often.
-            if (best < 3.2 * floorMag) {
-                continue;
+        *clean = (floorN > 0) ? (peak >= 3.2 * (floorSum / floorN)) : true;
+        return 20.0 * std::log10(peak);
+    };
+
+    // Mean of the strongest few harmonics in a band: robust to one landing in
+    // a spectral valley between formants.
+    auto bandLevel = [&](const double band[2], bool *ok) -> double {
+        rpm::vector<double> vals;
+        for (int k = 1; k <= 40; ++k) {
+            const double fk = k * f0;
+            if (fk > band[1]) break;
+            if (fk < band[0]) continue;
+            bool clean = false;
+            const double db = harmonic(fk, &clean);
+            if (db > -1e8 && clean) {
+                vals.push_back(db);
             }
         }
-
-        const double db = 20.0 * std::log10(best);
-        if (firstF < 0.0) {
-            firstF = bestF;
+        if (vals.empty()) {
+            *ok = false;
+            return 0.0;
         }
-        octs.push_back(std::log2(bestF / firstF));
-        amps.push_back(db);
+        std::sort(vals.begin(), vals.end(), std::greater<double>());
+        const int take = std::max(1, std::min(3, (int) vals.size()));
+        double sum = 0.0;
+        for (int i = 0; i < take; ++i) sum += vals[i];
+        *ok = true;
+        return sum / take;
+    };
+
+    bool loOk = false, hiOk = false;
+    const double lo = bandLevel(kLoBand, &loOk);
+    if (!loOk) {
+        return std::nullopt;
+    }
+    const double hi = bandLevel(kHiBand, &hiOk);
+    if (!hiOk) {
+        return kFloorTilt;
     }
 
-    // Three valid harmonics suffice: the SNR gate legitimately strips a light
-    // voice down to its lowest few, and the per-frame noise is absorbed by the
-    // one-second median downstream.
-    if (octs.size() < 3) {
-        return std::nullopt;
-    }
-
-    // Theil-Sen slope in dB per octave: the median of pairwise slopes shrugs
-    // off the occasional noise peak that survives the SNR gate, where a
-    // least-squares fit lets one flattened point drag the whole tail.
-    const int m = (int) octs.size();
-    rpm::vector<double> slopes;
-    slopes.reserve(m * (m - 1) / 2);
-    for (int i = 0; i < m; ++i) {
-        for (int j = i + 1; j < m; ++j) {
-            const double dx = octs[j] - octs[i];
-            if (std::abs(dx) > 1e-9) {
-                slopes.push_back((amps[j] - amps[i]) / dx);
-            }
-        }
-    }
-    if (slopes.empty()) {
-        return std::nullopt;
-    }
-    std::nth_element(slopes.begin(),
-            std::next(slopes.begin(), (int) slopes.size() / 2), slopes.end());
-    const double slope = slopes[slopes.size() / 2];
-    if (slope < -40.0 || slope > 15.0) {
-        return std::nullopt;
-    }
-    return slope;
+    const double octaves = std::log2(
+            ((kHiBand[0] + kHiBand[1]) / 2.0) / ((kLoBand[0] + kLoBand[1]) / 2.0));
+    return std::clamp((hi - lo) / octaves, -40.0, 15.0);
 }
