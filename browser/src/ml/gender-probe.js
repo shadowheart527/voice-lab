@@ -17,7 +17,12 @@
 // an ordinal signal to watch move, not a verdict and not a percentage of
 // listeners.
 
-const MODEL_URL = './models/ecapa_gender_int8.onnx';
+// Resolved against this module rather than the document, so the app works when
+// it is hosted under a path prefix (a project page at /voice-lab/, say) instead
+// of at a domain root. A document-relative './models/...' happens to survive
+// both cases; the onnxruntime prefix below does not, so both are pinned here.
+const MODEL_URL = new URL('../../models/ecapa_gender_int8.onnx', import.meta.url).href;
+const VENDOR_URL = new URL('../../vendor/', import.meta.url).href;
 const TARGET_RATE = 16000;
 const WINDOW_S = 1.0;
 const SILENCE_DBFS = -45;
@@ -52,17 +57,27 @@ function resampleTo16k(input, rate) {
     return out;
 }
 
+/**
+ * Is the model actually being served? A 16 MB download should not start unless
+ * it is there, and on a deployed site the answer should not cost a 404: a built
+ * site states it in a meta tag (see browser/tools/build-static.sh), so an
+ * intentional absence stays quiet in the console instead of reading as a fault.
+ * Served straight out of `browser/` there is no tag, so ask the server.
+ */
+async function modelIsServed() {
+    const declared = document.querySelector('meta[name="voicelab-model"]')?.content;
+    if (declared) return declared === 'present';
+    return (await fetch(MODEL_URL, { method: 'HEAD' })).ok;
+}
+
 export async function load() {
     if (session) return session;
     if (loading) return loading;
     loading = (async () => {
-        // Probe for the model first: a 16 MB download should not start unless
-        // it is actually there.
-        const head = await fetch(MODEL_URL, { method: 'HEAD' });
-        if (!head.ok) throw new Error('model not present');
+        if (!await modelIsServed()) throw new Error('model not present');
 
         ort = await import('../../vendor/ort.wasm.min.mjs');
-        ort.env.wasm.wasmPaths = '../vendor/';
+        ort.env.wasm.wasmPaths = VENDOR_URL;
         ort.env.wasm.numThreads = 1;
         // WASM execution provider only. The WebGPU provider creates a session
         // successfully on this quantised graph and then fails at run time on

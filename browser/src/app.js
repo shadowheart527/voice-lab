@@ -215,9 +215,12 @@ async function start() {
     }
 
     audioCtx = new AudioContext();
-    await audioCtx.audioWorklet.addModule('./src/worklet/tap-worklet.js');
+    // Both of these resolve against the document rather than this module when
+    // given a bare relative string, so they are pinned to import.meta.url: the
+    // app then loads the same way wherever it is hosted, root or path prefix.
+    await audioCtx.audioWorklet.addModule(new URL('./worklet/tap-worklet.js', import.meta.url));
 
-    worker = new Worker('./src/worker/analyzer.worker.js', { type: 'module' });
+    worker = new Worker(new URL('./worker/analyzer.worker.js', import.meta.url), { type: 'module' });
     worker.postMessage({ type: 'init', sampleRate: audioCtx.sampleRate });
     worker.onmessage = (e) => {
         const m = e.data;

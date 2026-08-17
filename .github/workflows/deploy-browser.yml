@@ -1,0 +1,90 @@
+# Publish the browser build to GitHub Pages.
+#
+# Pages is what makes the toolkit usable on a phone: microphones are only granted
+# in a secure context, so a page has to arrive over HTTPS with a real
+# certificate, which is exactly what this gives it for nothing.
+#
+# One-time setup, in the repository's Settings -> Pages: set Source to
+# "GitHub Actions". Until that is done this workflow's deploy step fails with a
+# "Pages site not found" error. See docs/deploy.md, which also covers what a
+# published site means for a private repository and for the AGPL.
+name: Deploy browser build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'browser/**'
+      - 'genderspace/stats.json'
+      - 'genderspace/weights.json'
+      - '.github/workflows/deploy-browser.yml'
+  workflow_dispatch:
+    inputs:
+      model_tag:
+        description: 'Release tag holding ecapa_gender_int8.onnx (blank to deploy without the neural probe)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deploy finish rather than cancelling it: a half-published site
+# is worse than a slightly stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: browser/package-lock.json
+
+      - name: Install onnxruntime-web
+        working-directory: browser
+        run: npm ci
+
+      # The model is a 16 MB third-party download that the repository
+      # deliberately does not carry, so it comes from a release asset when there
+      # is one. Absent, the app hides the listener reading and everything else
+      # works; see docs/deploy.md for how to publish one.
+      - name: Fetch the gender-probe model, if published
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODEL_TAG: ${{ inputs.model_tag || 'model' }}
+        run: |
+          mkdir -p browser/models
+          if gh release download "$MODEL_TAG" --repo "$GITHUB_REPOSITORY" \
+               --pattern ecapa_gender_int8.onnx --dir browser/models; then
+            echo "model: $(du -h browser/models/ecapa_gender_int8.onnx | cut -f1) from release $MODEL_TAG"
+          else
+            echo "::notice::No ecapa_gender_int8.onnx in release '$MODEL_TAG'; deploying without the neural probe."
+          fi
+
+      - name: Assemble the static site
+        run: browser/tools/build-static.sh browser/dist
+
+      - name: Check the built page for stale references
+        run: node browser/tools/check-dist.mjs browser/dist
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: browser/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

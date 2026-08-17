@@ -22,6 +22,11 @@ network, you must offer them its source.** The AGPL's network clause treats serv
 as distribution. Running it locally, on your own devices, or over a private network for your
 own use triggers nothing at all.
 
+`browser/tools/build-static.sh` discharges that obligation for you: a built site carries the
+licence and a source archive of the revision it was built from, linked from the page footer,
+and `browser/tools/check-dist.mjs` fails the build if that link is missing. So a deployment
+is compliant without the repository itself having to be public. See `docs/deploy.md`.
+
 `browser/src/dsp/core.js` is an independent implementation of standard signal-processing
 algorithms and carries no upstream code, but it ships as part of an AGPL work here.
 

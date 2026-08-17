@@ -21,6 +21,10 @@ proxy with a self-signed cert and trust it on the phone, or host it somewhere
 with TLS. The page detects an insecure context and says so rather than looking
 broken.
 
+`docs/deploy.md` covers both of the routes that give you a real certificate —
+GitHub Pages and `tailscale serve` — along with what each one implies for a
+private repository and for the AGPL.
+
 ## Why a reimplementation rather than a WASM port
 
 The earlier assessment argued for compiling the C++ engine to WebAssembly, on
@@ -114,7 +118,23 @@ python3 ml/coach/coach.py voice-session-*.json
 
 ## Verification harness
 
-`test-browser-app.sh` in the scratchpad drives the real page in headless
-Chrome with a known WAV injected as a fake microphone
-(`--use-file-for-fake-audio-capture`), so the whole client-side chain is
-testable against ground truth without anyone speaking into a microphone.
+`tools/smoke-dist.mjs` drives the real page in headless Chromium with a known WAV
+injected as a fake microphone (`--use-file-for-fake-audio-capture`), so the whole
+client-side chain is testable against ground truth without anyone speaking into a
+microphone. `tools/make-test-vowel.py` synthesises the WAV: a jittered glottal
+source through four formants, at a stated pitch and F1/F2.
+
+```sh
+npm i playwright                                   # once; browsers can be skipped
+tools/make-test-vowel.py /tmp/vowel.wav
+tools/build-static.sh
+node tools/smoke-dist.mjs dist /tmp/vowel.wav
+```
+
+It serves the built site under a *path prefix* rather than a domain root,
+because that is where deployment-only bugs live: at a root, a document-relative
+and a root-relative asset path resolve to the same URL, so a site can be wrong in
+a way nothing local reveals. On the default synthetic vowel (140 Hz, F1 620,
+F2 1180) the page should report 140 Hz, a resonance around 54% and a masculine
+read; a thinner test signal is not enough, and a two-formant pulse train reads
+the pitch correctly and the resonance not at all.

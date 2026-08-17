@@ -29,7 +29,11 @@ measurements on `ws://127.0.0.1:8765`.
   pitch deliberately excluded
 
 **Browser.** `browser/` runs the same analysis client-side (AudioWorklet + WASM), so the
-tools work on a phone with no install and no desktop engine running.
+tools work on a phone with no install and no desktop engine running. `browser/tools/build-static.sh`
+assembles a hostable copy, and `.github/workflows/deploy-browser.yml` publishes it to GitHub
+Pages so a phone can reach it over HTTPS, which is what the microphone requires;
+`docs/deploy.md` has the one setting that has to be changed by hand and what publishing
+implies for a private repository and for the AGPL.
 
 ## Measurement notes
 
@@ -52,6 +56,12 @@ live, meant to be adjusted against your own voice and microphone.
 ```sh
 scripts/bootstrap.sh          # fetch large deps (libtorch, ML models)
 engine/launcher/rebuild.sh    # build the desktop engine
+```
+
+To serve the browser build somewhere with TLS instead, see `docs/deploy.md`:
+
+```sh
+cd browser && npm ci && tools/build-static.sh && node tools/check-dist.mjs dist
 ```
 
 ## Licensing

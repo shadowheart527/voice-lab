@@ -76,6 +76,7 @@ Bootstrap complete. Next:
 
   cd browser && python3 -m http.server 8181 --bind 127.0.0.1
                                     serve the browser build
+  browser/tools/build-static.sh      assemble a hostable copy (see docs/deploy.md)
 
 Model weights for the gender probe are fetched separately:
   ml/.venv/bin/python ml/gender_probe/fetch_model.py

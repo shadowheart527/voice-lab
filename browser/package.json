@@ -1,15 +1,14 @@
 {
-  "name": "browser",
+  "name": "voice-lab-browser",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "private": true,
+  "description": "The voice-lab toolkit running client-side in a browser",
+  "license": "AGPL-3.0-only",
   "type": "commonjs",
+  "scripts": {
+    "build": "tools/build-static.sh dist",
+    "check": "node tools/check-dist.mjs dist"
+  },
   "dependencies": {
     "onnxruntime-web": "^1.20.1"
   }
