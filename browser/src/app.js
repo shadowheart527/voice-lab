@@ -3,6 +3,7 @@
 
 import { genderColor, noteName, fullnessCell } from './dsp/gender.js';
 import { SessionRecorder } from './session.js';
+import * as probe from './ml/gender-probe.js';
 
 const TRAIL_SECONDS = 6;
 const TARGET_MIN = 165, TARGET_MAX = 220;
@@ -14,6 +15,7 @@ const ctx = cv.getContext('2d');
 let view = 'gender';
 let running = false;
 let worker = null, audioCtx = null, stream = null, node = null;
+let listener = null;   // optional neural perceived-gender probe
 const session = new SessionRecorder(TARGET_MIN, TARGET_MAX);
 const trail = [];
 let last = null;
@@ -171,6 +173,11 @@ function updateReadout(m) {
         }
         el('vInBand').textContent = voicedFrames
             ? Math.round((inBandFrames / voicedFrames) * 100) + '%' : '—';
+        const lv = listener && listener.last;
+        if (lv !== null && lv !== undefined) {
+            el('vListener').textContent = Math.round(lv * 100) + '%';
+            el('vListener').style.color = genderColor(lv);
+        }
     } else {
         if (m.weight >= 0 && m.size !== null && m.size !== undefined) {
             const cell = fullnessCell(m.weight, 1 - m.size);
@@ -245,7 +252,17 @@ async function start() {
         processorOptions: { hopSize: hop },
         numberOfInputs: 1, numberOfOutputs: 0,
     });
-    node.port.onmessage = (e) => worker.postMessage({ type: 'block', block: e.data }, [e.data.buffer]);
+    node.port.onmessage = (e) => {
+        if (listener) listener.push(e.data);   // copy-free read before transfer
+        worker.postMessage({ type: 'block', block: e.data }, [e.data.buffer]);
+    };
+
+    // The neural probe is optional: if the model is not served, the app just
+    // does not show that reading.
+    probe.load().then(() => {
+        listener = new probe.StreamingProbe(audioCtx.sampleRate);
+        el('listenerStat').classList.remove('hidden');
+    }).catch(() => { listener = null; });
     src.connect(node);
 
     session.reset();

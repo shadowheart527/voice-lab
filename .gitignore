@@ -17,3 +17,7 @@ __pycache__/
 *.wav
 !docs/**/*.wav
 .DS_Store
+
+# Fetched by scripts/bootstrap.sh, not distributed here
+browser/vendor/
+browser/models/

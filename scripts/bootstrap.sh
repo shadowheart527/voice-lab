@@ -46,6 +46,24 @@ else
     echo "installed numpy, soundfile, onnxruntime"
 fi
 
+say "browser runtime + model (onnxruntime-web, gender probe)"
+if [ -d browser/vendor ] && [ -f browser/models/ecapa_gender_int8.onnx ]; then
+    echo "already present, skipping"
+elif command -v npm >/dev/null; then
+    ( cd browser && npm install --silent onnxruntime-web@1.20.1 )
+    mkdir -p browser/vendor browser/models
+    cp browser/node_modules/onnxruntime-web/dist/ort.wasm.min.mjs browser/vendor/
+    cp browser/node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded*.mjs browser/vendor/
+    cp browser/node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded*.wasm browser/vendor/
+    if [ -f ml/models/ecapa_gender_int8.onnx ]; then
+        cp ml/models/ecapa_gender_int8.onnx browser/models/
+    else
+        echo "run: ml/.venv/bin/python -m gender_probe.fetch_model  (then re-run this)"
+    fi
+else
+    echo "npm not found; the browser build works without the neural probe"
+fi
+
 say "generated web tables"
 python3 scripts/gen-web-tables.py
 
