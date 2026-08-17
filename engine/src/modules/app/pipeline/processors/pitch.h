@@ -21,8 +21,6 @@ namespace Module::App::Processors {
         void processData(const rpm::vector<double>& data, double sampleRate) override;
 
     private:
-        std::optional<double> computeSpectralTilt(
-                const rpm::vector<double>& data, double sampleRate, double f0);
 
         Main::Config *mConfig;
         Main::DataStore *mDataStore;

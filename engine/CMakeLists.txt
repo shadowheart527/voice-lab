@@ -108,6 +108,8 @@ set(SOURCES
     src/context/livefeed.cpp
     src/context/livefeed.h
     src/context/genderscore.h
+    src/analysis/weight/tilt.cpp
+    src/analysis/weight/tilt.h
     src/context/genderspace_table.h
     src/context/datastore.cpp
     src/context/datastore.h

@@ -7,14 +7,14 @@ ReReFFT::ReReFFT(int n, fftw_r2r_kind method)
     : mSize(n),
       mData(fftw_alloc_real(n))
 {
-    QMutexLocker lock(&sFFTWPlanMutex);
+    std::lock_guard<std::mutex> lock(sFFTWPlanMutex);
     importFFTWisdom();
     mPlan = fftw_plan_r2r_1d(n, mData, mData, method, FFTW_EM_FLAG);
 }
 
 ReReFFT::~ReReFFT()
 {
-    QMutexLocker lock(&sFFTWPlanMutex);
+    std::lock_guard<std::mutex> lock(sFFTWPlanMutex);
     fftw_free(mData);
     fftw_destroy_plan(mPlan);
 }

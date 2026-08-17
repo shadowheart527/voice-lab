@@ -5,7 +5,7 @@
 #include <fftw3.h>
 #include <complex>
 #include <memory>
-#include <QMutex>
+#include <mutex>
 
 #if defined(EMSCRIPTEN)
 #   define FFTW_EM_FLAG FFTW_ESTIMATE
@@ -30,7 +30,7 @@ namespace std
 
 namespace Analysis
 {
-    extern QMutex sFFTWPlanMutex;
+    extern std::mutex sFFTWPlanMutex;
 
     void importFFTWisdom();
 
