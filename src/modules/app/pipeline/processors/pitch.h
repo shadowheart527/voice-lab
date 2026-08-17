@@ -4,6 +4,7 @@
 #include "rpcxx.h"
 
 #include <memory>
+#include <optional>
 
 #include "../../../../context/config.h"
 #include "../../../../context/datastore.h"
@@ -20,6 +21,9 @@ namespace Module::App::Processors {
         void processData(const rpm::vector<double>& data, double sampleRate) override;
 
     private:
+        std::optional<double> computeSpectralTilt(
+                const rpm::vector<double>& data, double sampleRate, double f0);
+
         Main::Config *mConfig;
         Main::DataStore *mDataStore;
         std::shared_ptr<Analysis::PitchSolver>& mPitchSolver;

@@ -127,23 +127,31 @@ void QPainterWrapper::drawSpectrogram(const rpm::vector<std::pair<double, Main::
                 index = (xOffset % texWidth) + ioff;
             }
             else {
-                index = ioff;
+                // Wrapped chunk lands at the start of the ring.
+                index = ioff - sliceCount1;
             }
 
             nffts[index] = nfft;
             sampleRates[index] = sampleRate;
 
+            // Each chunk is uploaded as its own sub-image, so each is indexed with
+            // its own width as the row stride (using the combined sliceCount here
+            // scrambled the upload on every ring wrap).
             for (int k = 0; k < nfft; ++k) {
                 if (ioff < sliceCount1) {
-                    data1[k * sliceCount + ioff] = fftData[k];
+                    data1[k * sliceCount1 + ioff] = fftData[k];
                 }
                 else {
-                    data2[k * sliceCount + (ioff - sliceCount1)] = fftData[k];
+                    data2[k * sliceCount2 + (ioff - sliceCount1)] = fftData[k];
                 }
             }
         }
 
+        const int uploadStart = xOffset;
+        xOffset += sliceCount;
+
         p->drawSpectrogram(
+            uploadStart,
             xOffset,
             sliceCount1,
             sliceCount2,
@@ -155,18 +163,17 @@ void QPainterWrapper::drawSpectrogram(const rpm::vector<std::pair<double, Main::
             mFrequencyScale,
             mMinFrequency, mMaxFrequency,
             mMaxGain,
-            cmap,
+            mLightMode ? lightCmap() : cmap,
             slices.front().first,
             slices.back().first,
             mTimeStart,
             mTimeEnd);
-        
-        xOffset += sliceCount;
     }
     else {
         static rpm::vector<GLfloat> emptyData(0);
 
         p->drawSpectrogram(
+            xOffset,
             xOffset,
             0,
             0,
@@ -178,7 +185,7 @@ void QPainterWrapper::drawSpectrogram(const rpm::vector<std::pair<double, Main::
             mFrequencyScale,
             mMinFrequency, mMaxFrequency,
             mMaxGain,
-            cmap,
+            mLightMode ? lightCmap() : cmap,
             slices.front().first,
             slices.back().first,
             mTimeStart,

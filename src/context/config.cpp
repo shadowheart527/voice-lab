@@ -110,12 +110,28 @@ Config::Config()
     initSubTable(mTbl, "view");
     initSubTable(mTbl, "ui");
     initSubTable(mTbl, "analysis");
+    initSubTable(mTbl, "target");
+    initSubTable(mTbl, "feed");
 }
 
 Config::~Config()
 {
-    std::ofstream stream(getConfigPath());
-    stream << mTbl;
+    save();
+}
+
+void Config::save()
+{
+    // Write-then-rename so a crash mid-write can't truncate an existing config.
+    const auto path = getConfigPath();
+    auto tmp = path;
+    tmp += ".tmp";
+    {
+        std::ofstream stream(tmp, std::ios_base::trunc);
+        stream << mTbl;
+        if (!stream.good()) return;
+    }
+    std::error_code ec;
+    fs::rename(tmp, path, ec);
 }
 
 Module::Audio::Backend Config::getAudioBackend()
@@ -359,7 +375,9 @@ std::tuple<double, double, double> Config::getViewFormantColor(int i)
 
 bool Config::getViewShowSpectrogram()
 {
-    return boolField(mTbl["view"], "showSpectrogram", false);
+    // Default on: with all three display layers defaulting to off, a fresh install
+    // showed nothing but the empty axes, which reads as a broken app.
+    return boolField(mTbl["view"], "showSpectrogram", true);
 }
 
 void Config::setViewShowSpectrogram(bool b)
@@ -370,7 +388,7 @@ void Config::setViewShowSpectrogram(bool b)
 
 bool Config::getViewShowPitch()
 {
-    return boolField(mTbl["view"], "showPitch", false);
+    return boolField(mTbl["view"], "showPitch", true);
 }
 
 void Config::setViewShowPitch(bool b)
@@ -381,7 +399,205 @@ void Config::setViewShowPitch(bool b)
 
 bool Config::getViewShowFormants()
 {
-    return boolField(mTbl["view"], "showFormants", false);
+    return boolField(mTbl["view"], "showFormants", true);
+}
+
+bool Config::getViewFormantSmoothing()
+{
+    // Median-5 display smoothing of the formant tracks (~100 ms at the default
+    // 20 ms spacing). Display-only: the stored estimates stay raw.
+    return boolField(mTbl["view"], "formantSmoothing", true);
+}
+
+bool Config::getViewPitchSmoothing()
+{
+    // Median-3 outlier rejection on the displayed pitch track. Display-only.
+    return boolField(mTbl["view"], "pitchSmoothing", true);
+}
+
+void Config::setViewPitchSmoothing(bool b)
+{
+    mTbl["view"]["pitchSmoothing"].ref<bool>() = b;
+}
+
+void Config::setViewFormantSmoothing(bool b)
+{
+    mTbl["view"]["formantSmoothing"].ref<bool>() = b;
+}
+
+double Config::getTargetPitchMin()
+{
+    // Default band 165-220 Hz: a common feminine-perception conversational pitch
+    // range, meant as a starting point and fully adjustable from the sidebar.
+    return doubleField(mTbl["target"], "pitchMin", 165.0);
+}
+
+void Config::setTargetPitchMin(double hz)
+{
+    mTbl["target"]["pitchMin"].ref<double>() = hz;
+    emit targetPitchMinChanged(hz);
+}
+
+double Config::getTargetPitchMax()
+{
+    return doubleField(mTbl["target"], "pitchMax", 220.0);
+}
+
+void Config::setTargetPitchMax(double hz)
+{
+    mTbl["target"]["pitchMax"].ref<double>() = hz;
+    emit targetPitchMaxChanged(hz);
+}
+
+double Config::getMascPitchMin()
+{
+    // Reference band only (drawn blue): typical masculine conversational range.
+    return doubleField(mTbl["target"], "mascMin", 85.0);
+}
+
+double Config::getMascPitchMax()
+{
+    return doubleField(mTbl["target"], "mascMax", 155.0);
+}
+
+// Typical running-speech formant zones by gender, drawn as reference bands like the
+// pitch bands. Deliberately NOT full per-vowel ranges (those overlap almost
+// completely); these are the zones conversational-speech medians tend to occupy.
+// Anchored on Hillenbrand et al. (1995) means and the ~17% female formant elevation.
+double Config::getFormantBand(int formant, bool fem, bool upper)
+{
+    static const double defaults[3][2][2] = {
+        // masc lo/hi        fem lo/hi
+        { { 380.0, 580.0 },  { 480.0, 700.0 } },   // F1
+        { { 1150.0, 1500.0 }, { 1500.0, 1900.0 } }, // F2
+        { { 2300.0, 2700.0 }, { 2750.0, 3200.0 } }, // F3
+    };
+    static const char *keys[3][2][2] = {
+        { { "f1MascMin", "f1MascMax" }, { "f1FemMin", "f1FemMax" } },
+        { { "f2MascMin", "f2MascMax" }, { "f2FemMin", "f2FemMax" } },
+        { { "f3MascMin", "f3MascMax" }, { "f3FemMin", "f3FemMax" } },
+    };
+    return doubleField(mTbl["target"], keys[formant][fem ? 1 : 0][upper ? 1 : 0],
+            defaults[formant][fem ? 1 : 0][upper ? 1 : 0]);
+}
+
+bool Config::getViewShowFormantBands()
+{
+    return boolField(mTbl["target"], "showFormantBands", true);
+}
+
+void Config::setViewShowFormantBands(bool b)
+{
+    mTbl["target"]["showFormantBands"].ref<bool>() = b;
+    emit viewShowFormantBandsChanged(b);
+}
+
+bool Config::getViewShowTargetBand()
+{
+    return boolField(mTbl["target"], "showBand", true);
+}
+
+void Config::setViewShowTargetBand(bool b)
+{
+    mTbl["target"]["showBand"].ref<bool>() = b;
+    emit viewShowTargetBandChanged(b);
+}
+
+bool Config::getViewShowHud()
+{
+    return boolField(mTbl["target"], "showHud", true);
+}
+
+void Config::setViewShowHud(bool b)
+{
+    mTbl["target"]["showHud"].ref<bool>() = b;
+    emit viewShowHudChanged(b);
+}
+
+bool Config::getUiLightMode()
+{
+    return boolField(mTbl["ui"], "lightMode", false);
+}
+
+void Config::setUiLightMode(bool b)
+{
+    mTbl["ui"]["lightMode"].ref<bool>() = b;
+    emit uiLightModeChanged(b);
+}
+
+bool Config::getViewTrackLines()
+{
+    // Connected-line track style instead of scattered dots.
+    return boolField(mTbl["view"], "trackLines", true);
+}
+
+void Config::setViewTrackLines(bool b)
+{
+    mTbl["view"]["trackLines"].ref<bool>() = b;
+    emit viewTrackLinesChanged(b);
+}
+
+bool Config::getViewGenderColors()
+{
+    // Color track points along the masc-to-fem gradient; identity is carried by
+    // each track's outline color and edge label instead.
+    return boolField(mTbl["view"], "genderColors", true);
+}
+
+void Config::setViewGenderColors(bool b)
+{
+    mTbl["view"]["genderColors"].ref<bool>() = b;
+    emit viewGenderColorsChanged(b);
+}
+
+double Config::getViewHistorySpan()
+{
+    // Rolling window of the history graphs, seconds.
+    return doubleField(mTbl["view"], "historySpan", 120.0);
+}
+
+void Config::setViewHistorySpan(double s)
+{
+    mTbl["view"]["historySpan"].ref<double>() = s;
+    emit viewHistorySpanChanged(s);
+}
+
+bool Config::getViewHistoryArea()
+{
+    // Area-fill history style: pink fill below the score curve, blue above.
+    return boolField(mTbl["view"], "historyArea", true);
+}
+
+void Config::setViewHistoryArea(bool b)
+{
+    mTbl["view"]["historyArea"].ref<bool>() = b;
+    emit viewHistoryAreaChanged(b);
+}
+
+bool Config::getViewShowHistory()
+{
+    // Rolling masc/andro/fem history graphs on the right side.
+    return boolField(mTbl["view"], "showHistory", true);
+}
+
+void Config::setViewShowHistory(bool b)
+{
+    mTbl["view"]["showHistory"].ref<bool>() = b;
+    emit viewShowHistoryChanged(b);
+}
+
+bool Config::getUiShowSidebar()
+{
+    // The QML referenced this property but it never existed in Config, so the
+    // sidebar state silently failed to restore. Default open so a first launch
+    // shows where the controls live.
+    return boolField(mTbl["ui"], "showSidebar", true);
+}
+
+void Config::setUiShowSidebar(bool b)
+{
+    mTbl["ui"]["showSidebar"].ref<bool>() = b;
+    emit uiShowSidebarChanged(b);
 }
 
 void Config::setViewShowFormants(bool b)
@@ -411,6 +627,26 @@ void Config::setAnalysisGranularity(double ms) {
 
 double Config::getAnalysisGranularity() {
     return doubleField(mTbl["analysis"], "granularity", 20.0);
+}
+
+bool Config::getAnalysisDenoise() {
+    // RNNoise speech denoising + voice activity gating of the trackers.
+    return boolField(mTbl["analysis"], "denoise", true);
+}
+
+void Config::setAnalysisDenoise(bool b) {
+    mTbl["analysis"]["denoise"].ref<bool>() = b;
+    emit analysisDenoiseChanged(b);
+}
+
+bool Config::getFeedEnabled() {
+    // Live localhost WebSocket feed of tracked values ([feed] enabled/port),
+    // consumed by the local acousticgender.space genderspace overlay.
+    return boolField(mTbl["feed"], "enabled", true);
+}
+
+int Config::getFeedPort() {
+    return (int) doubleField(mTbl["feed"], "port", 8765.0);
 }
 
 void Config::setAnalysisSpectrogramWindow(double ms) {
@@ -450,7 +686,11 @@ void Config::setAnalysisPitchSpacing(double ms) {
 }
 
 double Config::getAnalysisPitchSpacing() {
-    return doubleField(mTbl["analysis"], "pitchSpacing", 80.0);
+    // 20 ms (matching the analysis granularity) instead of 80: at 80 ms the pitch
+    // track updated 12.5x/s against a smoothly scrolling view, which read as sparse,
+    // popping dots. Analysis cost is small; the measured update budget has plenty of
+    // headroom for a 4x rate.
+    return doubleField(mTbl["analysis"], "pitchSpacing", 20.0);
 }
 
 void Config::setAnalysisFormantSpacing(double ms) {
@@ -458,7 +698,8 @@ void Config::setAnalysisFormantSpacing(double ms) {
 }
 
 double Config::getAnalysisFormantSpacing() {
-    return doubleField(mTbl["analysis"], "formantSpacing", 80.0);
+    // Same rationale as pitchSpacing: 20 ms for a dense, responsive formant track.
+    return doubleField(mTbl["analysis"], "formantSpacing", 20.0);
 }
 
 void Config::setAnalysisOscilloscopeSpacing(double ms) {

@@ -20,6 +20,7 @@ namespace Module::App::Processors {
 
     protected:
         double getCenteredTime() const;
+        double getEndTime() const;
 
     private:
         double mFrameSpace;

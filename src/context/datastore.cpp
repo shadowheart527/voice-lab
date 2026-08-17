@@ -74,6 +74,11 @@ OptionalTimeTrack<double>& DataStore::getPitchTrack()
     return mPitchTrack;
 }
 
+OptionalTimeTrack<double>& DataStore::getWeightTrack()
+{
+    return mWeightTrack;
+}
+
 OptionalTimeTrack<double>& DataStore::getFormantTrack(int i)
 {
     return mFormantTracks.at(i);
@@ -97,6 +102,16 @@ TimeTrack<rpm::vector<double>>& DataStore::getSoundTrack()
 TimeTrack<rpm::vector<double>>& DataStore::getGifTrack()
 {
     return mGifTrack;
+}
+
+double DataStore::getVoiceActivity() const
+{
+    return mVoiceActivity.load(std::memory_order_relaxed);
+}
+
+void DataStore::setVoiceActivity(double p)
+{
+    mVoiceActivity.store(p, std::memory_order_relaxed);
 }
 
 

@@ -12,6 +12,8 @@
 #include <thread>
 #include <chrono>
 
+struct DenoiseState;
+
 namespace Module::App
 {
     using millis = std::chrono::milliseconds;
@@ -43,7 +45,16 @@ namespace Module::App
         Module::Audio::Buffer mBuffer;
         double mSampleRate;
 
-        rpm::vector<std::unique_ptr<Processors::BaseProcessor>> mProcessors; 
+        rpm::vector<std::unique_ptr<Processors::BaseProcessor>> mProcessors;
+
+        // RNNoise denoiser state (analysis thread only). The FIFOs adapt the
+        // analysis block size to RNNoise's fixed 480-sample (10 ms at 48 kHz) frame.
+        ::DenoiseState *mDenoiseState = nullptr;
+        rpm::vector<float> mDenoiseInFifo;
+        double mVadSmooth = 0.0;
+        bool mDenoiseBypassLogged = false;
+
+        void computeVoiceActivity(const rpm::vector<double>& block);
 
         void callbackProcessing();
     };

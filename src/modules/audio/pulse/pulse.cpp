@@ -1,4 +1,5 @@
 #include "pulse.h"
+#include <cstdlib>
 #include <iostream>
 #include <memory>
 
@@ -184,7 +185,27 @@ void Pulse::openCaptureStream(const Device *pDevice)
             },
             this);
 
-    pa_stream_connect_record(mCaptureStream, pDevice->name.c_str(), nullptr, (pa_stream_flags_t) (PA_STREAM_FIX_RATE | PA_STREAM_START_CORKED));
+    // Without an explicit buffer_attr the server picks a large fragment (hundreds of
+    // ms), which is what made this backend feel laggy for real-time analysis. Ask for
+    // ~20 ms fragments and let the server tune the rest.
+    pa_buffer_attr captureAttr;
+    captureAttr.maxlength = (uint32_t) -1;
+    captureAttr.tlength   = (uint32_t) -1;
+    captureAttr.prebuf    = (uint32_t) -1;
+    captureAttr.minreq    = (uint32_t) -1;
+    captureAttr.fragsize  = (uint32_t) ((ss.rate * sizeof(float) * 20) / 1000);
+
+    // No PA_STREAM_FIX_RATE here: that flag overrides the requested 48 kHz with the
+    // device's native rate (the C920 mic reports 32 kHz), which both starves RNNoise
+    // (48 kHz only) and makes the analysis rate device-dependent. Without the flag
+    // the server resamples to exactly the requested spec.
+    //
+    // PULSE_SOURCE overrides the capture device. libpulse would only honor it for a
+    // null device argument, and an explicit device is passed here, so apply it by
+    // hand. Lets a test harness target a private sink monitor without touching the
+    // system default source (which other running instances follow).
+    const char *envSource = std::getenv("PULSE_SOURCE");
+    pa_stream_connect_record(mCaptureStream, envSource ? envSource : pDevice->name.c_str(), &captureAttr, (pa_stream_flags_t) (PA_STREAM_START_CORKED | PA_STREAM_ADJUST_LATENCY));
 
     pa_usec_t start = pa_rtclock_now();
     do {

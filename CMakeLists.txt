@@ -105,6 +105,10 @@ set(SOURCES
     src/context/rendercontext.h
     src/context/guicontext.cpp
     src/context/guicontext.h
+    src/context/livefeed.cpp
+    src/context/livefeed.h
+    src/context/genderscore.h
+    src/context/genderspace_table.h
     src/context/datastore.cpp
     src/context/datastore.h
     src/context/views/views.h
@@ -233,7 +237,7 @@ endif()
 
 find_package(Eigen3 REQUIRED NO_MODULE)
 
-find_package(Qt6 COMPONENTS Charts Quick QuickControls2 QuickTemplates2 Qml Widgets OpenGL Gui Core REQUIRED)
+find_package(Qt6 COMPONENTS Charts Quick QuickControls2 QuickTemplates2 Qml Widgets OpenGL Gui Core WebSockets REQUIRED)
 foreach(c Charts Quick QuickControls2 QuickTemplates2 Qml Widgets OpenGL Gui Core)
     if(${Qt6${c}_FOUND})
         get_target_property(Qt6${c}_LIBRARY_FILE ${Qt6${c}_LIBRARIES} LOCATION)
@@ -331,13 +335,11 @@ else()
 endif()
 
 target_include_directories(in-formant SYSTEM PRIVATE ${ARMADILLO_INCLUDE_DIR} ${FFTW_INCLUDE_DIRS} ${TOMLPP_INCLUDE_DIR})
-target_link_libraries(in-formant PRIVATE Eigen3::Eigen ${FFTW_LIBRARIES} Qt6::Charts Qt6::Quick Qt6::QuickControls2 Qt6::QuickTemplates2 Qt6::Qml Qt6::Widgets Qt6::OpenGL Qt6::Gui Qt6::Core)
+target_link_libraries(in-formant PRIVATE Eigen3::Eigen ${FFTW_LIBRARIES} Qt6::Charts Qt6::Quick Qt6::QuickControls2 Qt6::QuickTemplates2 Qt6::Qml Qt6::Widgets Qt6::OpenGL Qt6::Gui Qt6::Core Qt6::WebSockets)
 target_link_directories(in-formant PRIVATE ${FFTW_LIBRARY_DIRS})
 
-set(BUILD_SHARED_LIBS TRUE)
-add_subdirectory(external/freetype EXCLUDE_FROM_ALL)
-target_link_libraries(in-formant PRIVATE freetype)
-set(BUILD_SHARED_LIBS)
+find_package(Freetype REQUIRED)
+target_link_libraries(in-formant PRIVATE Freetype::Freetype)
 
 add_subdirectory(external/rpmalloc EXCLUDE_FROM_ALL)
 target_link_libraries(in-formant PRIVATE rpcxx_only)
@@ -345,6 +347,23 @@ target_link_libraries(in-formant PRIVATE rpcxx_only)
 add_subdirectory(external/libsamplerate)
 target_link_libraries(in-formant PRIVATE lsr)
 target_include_directories(in-formant PRIVATE external/libsamplerate/src)
+
+# RNNoise (xiph, BSD): real-time speech denoising + voice activity detection,
+# used to clean the capture before analysis and to gate the pitch/formant
+# trackers so background noise is not tracked as voice.
+add_library(rnnoise STATIC
+    external/rnnoise/src/celt_lpc.c
+    external/rnnoise/src/denoise.c
+    external/rnnoise/src/kiss_fft.c
+    external/rnnoise/src/pitch.c
+    external/rnnoise/src/rnn.c
+    external/rnnoise/src/rnn_data.c
+    external/rnnoise/src/rnn_reader.c)
+target_include_directories(rnnoise PUBLIC external/rnnoise/include)
+# -fno-fast-math: the project sets -ffast-math globally, which RNNoise's DSP code
+# explicitly refuses (NaN handling matters when chewing on raw mic input).
+set_target_properties(rnnoise PROPERTIES COMPILE_OPTIONS "-w;-fno-fast-math")
+target_link_libraries(in-formant PRIVATE rnnoise)
 
 target_compile_definitions(in-formant PRIVATE
     -DINFORMANT_VERSION=${CUR_VERSION} -DARMA_DONT_USE_WRAPPER
@@ -393,6 +412,10 @@ if (ENABLE_TORCH)
         src/analysis/formant/deepformants/features.cpp
         src/analysis/formant/deepformants/model.cpp
         src/analysis/formant/deepformants.cpp)
+    set_source_files_properties(
+        src/analysis/formant/deepformants/model.cpp
+        src/analysis/formant/deepformants.cpp
+        PROPERTIES COMPILE_FLAGS "-O0 -fno-fast-math")
 endif()
 
 ## PLATFORM SPECIFIC CODE

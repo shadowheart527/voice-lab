@@ -42,12 +42,23 @@ void CanvasRenderer::initialize(Main::RenderContext *renderContext)
     }
 #endif
 
+    std::cout << "Gui::CanvasRenderer] GL_VERSION: "
+              << (const char *) glGetString(GL_VERSION) << std::endl;
+    std::cout << "Gui::CanvasRenderer] GL_SHADING_LANGUAGE_VERSION: "
+              << (const char *) glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
+    std::cout << "Gui::CanvasRenderer] GL_RENDERER: "
+              << (const char *) glGetString(GL_RENDERER) << std::endl;
+
     mDevicePixelRatio = 1.0;
     mDpi = 96.0;
 
+    // mZoomScaleText was previously left uninitialised here while initFonts() read it
+    // to size every glyph, so the first atlas was rasterised from an indeterminate
+    // value (undefined behaviour, and -ffast-math is on globally).
     mZoomScale = 1.0;
+    mZoomScaleText = 1.0;
 
-    initFonts();
+    ensureFonts();
     initShaders();
 
     initTexture(mSpecTex, 2048, 4096+2);
@@ -70,16 +81,23 @@ void CanvasRenderer::cleanup()
 
 void CanvasRenderer::synchronize(QQuickFramebufferObject *item)
 {
-    mDevicePixelRatio = item->window()->devicePixelRatio();
+    QQuickWindow *window = item->window();
+
+    mDevicePixelRatio = window->devicePixelRatio();
     mWidth = item->width() * mDevicePixelRatio;
     mHeight = item->height() * mDevicePixelRatio;
-    mDpi = item->window()->screen()->logicalDotsPerInch();
 
-    mZoomScale = 1.0;
-    mZoomScaleText = 1.0;
+    // screen() is null while the window is between screens; keep the previous DPI
+    // rather than dereferencing it.
+    if (QScreen *screen = window->screen()) {
+        mDpi = screen->logicalDotsPerInch();
+    }
 
-    deleteFonts();
-    initFonts();
+    // This used to unconditionally tear down and re-rasterise all three font atlases
+    // on every single frame -- roughly 765 glyph textures deleted and re-uploaded per
+    // frame. ensureFonts() rebuilds only when the DPI, device pixel ratio or text zoom
+    // actually changed.
+    ensureFonts();
 }
 
 void CanvasRenderer::render()
@@ -98,24 +116,26 @@ void CanvasRenderer::render()
     QPainterWrapper painter(this);
     mRenderContext->render(&painter);
 
-    std::stringstream ss1;
-    ss1 << "Render: " << timings::render;
-    auto renderTimeString = ss1.str();
+    // Render/update timings, opt-in: this corner now belongs to the voice HUD.
+    static const bool showTimings = (std::getenv("IF_DEBUG_TIMINGS") != nullptr);
+    if (showTimings) {
+        std::stringstream ss1;
+        ss1 << "Render: " << timings::render;
+        auto renderTimeString = ss1.str();
 
-    std::stringstream ss2;
-    ss2 << "Update: " << timings::update;
-    auto updateTimeString = ss2.str();
+        std::stringstream ss2;
+        ss2 << "Update: " << timings::update;
+        auto updateTimeString = ss2.str();
 
-    float y = 10;
-    QRect textBox;
+        float y = (float) mHeight - 10;
+        QRect textBox;
 
-    textBox = textBoundsNormal(renderTimeString);
-    y += textBox.height();
-    drawTextNormalOutlined(10, y, Qt::white, renderTimeString);
+        textBox = textBoundsNormal(renderTimeString);
+        drawTextNormalOutlined(10, y, Qt::white, renderTimeString);
+        y -= textBox.height() + 10;
 
-    textBox = textBoundsNormal(updateTimeString);
-    y += textBox.height() + 10;
-    drawTextNormalOutlined(10, y, Qt::white, updateTimeString);
+        drawTextNormalOutlined(10, y, Qt::white, updateTimeString);
+    }
 }
 
 void CanvasRenderer::setZoomScale(double zoomScale)
@@ -131,8 +151,7 @@ void CanvasRenderer::setZoomScale(double zoomScale)
             mZoomScaleText = 1 - (1 - mZoomScale) * (0.5 / 0.75);
         }
 
-        deleteFonts();
-        initFonts();
+        ensureFonts();
     }
 }
 
@@ -181,13 +200,214 @@ QRect CanvasRenderer::textBoundsSmaller(const std::string &text)
     return textBounds(mFontSmaller, text);
 }
 
+void CanvasRenderer::drawDotsColored(const rpm::vector<QPointF> &points,
+        const rpm::vector<QColor> &colors, float radius, float radiusAdd)
+{
+    if (points.empty()) {
+        return;
+    }
+
+    // Batched: one interleaved buffer for every dot, one draw call. Colors are
+    // per-dot; a single-element `colors` vector applies to all dots.
+    const float radiusScale = mZoomScale * (mDpi * mDevicePixelRatio) / 96;
+
+    static const float corners[6][2] = {
+        { -1.5f, -1.5f }, { 1.5f, -1.5f }, { 1.5f, 1.5f },
+        { -1.5f, -1.5f }, { 1.5f, 1.5f }, { -1.5f, 1.5f },
+    };
+
+    static rpm::vector<float> verts;
+    verts.clear();
+    verts.reserve(points.size() * 6 * 8);
+
+    for (size_t i = 0; i < points.size(); ++i) {
+        const auto& point = points[i];
+        const QColor& col = colors.size() == 1 ? colors[0] : colors[i];
+        const float r = (float) col.redF();
+        const float g = (float) col.greenF();
+        const float b = (float) col.blueF();
+        for (const auto& c : corners) {
+            verts.push_back(c[0]);
+            verts.push_back(c[1]);
+            verts.push_back((float) point.x());
+            verts.push_back((float) point.y());
+            verts.push_back(radius);
+            verts.push_back(r);
+            verts.push_back(g);
+            verts.push_back(b);
+        }
+    }
+
+    mDotsProgram->bind();
+
+    QMatrix4x4 projection;
+    projection.ortho(0, mWidth, 0, mHeight, -1, 1);
+    mDotsProgram->setUniformValue("projection", projection);
+    mDotsProgram->setUniformValue("radiusScale", radiusScale);
+    mDotsProgram->setUniformValue("radiusAdd", radiusAdd);
+
+    glBindVertexArray(mDotsVao);
+    glBindBuffer(GL_ARRAY_BUFFER, mDotsVbo);
+    glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(float), verts.data(), GL_STREAM_DRAW);
+    glDrawArrays(GL_TRIANGLES, 0, (GLsizei) (points.size() * 6));
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    mDotsProgram->release();
+}
+
 void CanvasRenderer::drawScatterWithOutline(const rpm::vector<QPointF> &points, float radius, const QColor &fillColor, const QColor &outlineColor)
 {
-    for (const auto& point : points) {
-        drawPoint(point, radius + 0.6667, outlineColor);
+    rpm::vector<QColor> outline { outlineColor };
+    rpm::vector<QColor> fill { fillColor };
+    drawDotsColored(points, outline, radius, 0.6667f);
+    drawDotsColored(points, fill, radius, 0.0f);
+}
+
+void CanvasRenderer::drawRibbon(const rpm::vector<QPointF> &points,
+        const rpm::vector<QColor> &colors, float width)
+{
+    if (points.size() < 2) {
+        return;
     }
-    for (const auto& point : points) {
-        drawPoint(point, radius, fillColor);
+
+    const float scale = mZoomScale * (mDpi * mDevicePixelRatio) / 96;
+    const float halfW = 0.5f * width * scale;
+
+    static rpm::vector<float> verts;
+    verts.clear();
+    verts.reserve((points.size() - 1) * 6 * 5);
+
+    auto colorOf = [&](size_t i) -> const QColor& {
+        return colors.size() == 1 ? colors[0] : colors[i];
+    };
+
+    for (size_t i = 0; i + 1 < points.size(); ++i) {
+        const float x1 = (float) points[i].x(), y1 = (float) points[i].y();
+        const float x2 = (float) points[i + 1].x(), y2 = (float) points[i + 1].y();
+        float dx = x2 - x1, dy = y2 - y1;
+        const float d = std::sqrt(dx * dx + dy * dy);
+        if (d < 1e-6f) {
+            continue;
+        }
+        const float nx = -dy / d * halfW, ny = dx / d * halfW;
+
+        const QColor& c1 = colorOf(i);
+        const QColor& c2 = colorOf(i + 1);
+        const float r1 = (float) c1.redF(), g1 = (float) c1.greenF(), b1 = (float) c1.blueF();
+        const float r2 = (float) c2.redF(), g2 = (float) c2.greenF(), b2 = (float) c2.blueF();
+
+        const float quad[6][5] = {
+            { x1 - nx, y1 - ny, r1, g1, b1 },
+            { x1 + nx, y1 + ny, r1, g1, b1 },
+            { x2 + nx, y2 + ny, r2, g2, b2 },
+            { x1 - nx, y1 - ny, r1, g1, b1 },
+            { x2 + nx, y2 + ny, r2, g2, b2 },
+            { x2 - nx, y2 - ny, r2, g2, b2 },
+        };
+        for (const auto& v : quad) {
+            verts.insert(verts.end(), v, v + 5);
+        }
+    }
+
+    if (verts.empty()) {
+        return;
+    }
+
+    mRibbonProgram->bind();
+
+    QMatrix4x4 projection;
+    projection.ortho(0, mWidth, 0, mHeight, -1, 1);
+    mRibbonProgram->setUniformValue("projection", projection);
+    mRibbonProgram->setUniformValue("alphaMul", 1.0f);
+
+    glBindVertexArray(mRibbonVao);
+    glBindBuffer(GL_ARRAY_BUFFER, mRibbonVbo);
+    glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(float), verts.data(), GL_STREAM_DRAW);
+    glDrawArrays(GL_TRIANGLES, 0, (GLsizei) (verts.size() / 5));
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    mRibbonProgram->release();
+
+    // Rounded joints, batched through the dots path (radius is pre-scale units).
+    drawDotsColored(points, colors, 0.5f * width, 0.0f);
+}
+
+void CanvasRenderer::drawAreaStrip(const rpm::vector<QPointF> &points,
+        float yTop, float yBottom, const QColor &above, const QColor &below)
+{
+    if (points.size() < 2) {
+        return;
+    }
+
+    static rpm::vector<float> verts;
+
+    auto emitQuads = [&](const QColor &color, bool fillBelow) {
+        verts.clear();
+        verts.reserve((points.size() - 1) * 6 * 5);
+        const float r = (float) color.redF();
+        const float g = (float) color.greenF();
+        const float b = (float) color.blueF();
+        const float edge = fillBelow ? yBottom : yTop;
+        for (size_t i = 0; i + 1 < points.size(); ++i) {
+            const float x1 = (float) points[i].x(), y1 = (float) points[i].y();
+            const float x2 = (float) points[i + 1].x(), y2 = (float) points[i + 1].y();
+            const float quad[6][5] = {
+                { x1, y1, r, g, b },
+                { x2, y2, r, g, b },
+                { x2, edge, r, g, b },
+                { x1, y1, r, g, b },
+                { x2, edge, r, g, b },
+                { x1, edge, r, g, b },
+            };
+            for (const auto& v : quad) {
+                verts.insert(verts.end(), v, v + 5);
+            }
+        }
+
+        mRibbonProgram->setUniformValue("alphaMul", (GLfloat) color.alphaF());
+        glBindBuffer(GL_ARRAY_BUFFER, mRibbonVbo);
+        glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(float), verts.data(), GL_STREAM_DRAW);
+        glDrawArrays(GL_TRIANGLES, 0, (GLsizei) (verts.size() / 5));
+    };
+
+    mRibbonProgram->bind();
+
+    QMatrix4x4 projection;
+    projection.ortho(0, mWidth, 0, mHeight, -1, 1);
+    mRibbonProgram->setUniformValue("projection", projection);
+
+    glBindVertexArray(mRibbonVao);
+    emitQuads(below, true);
+    emitQuads(above, false);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    mRibbonProgram->release();
+}
+
+void CanvasRenderer::drawPolyTrack(const rpm::vector<QPointF> &points,
+        const rpm::vector<QColor> &colors, float size, bool asLine,
+        const QColor &outlineColor)
+{
+    if (points.empty()) {
+        return;
+    }
+
+    rpm::vector<QColor> outline { outlineColor };
+    const bool wantOutline = outlineColor.alpha() > 0;
+    if (asLine) {
+        if (wantOutline) {
+            drawRibbon(points, outline, size + 2.4f);
+        }
+        drawRibbon(points, colors, size);
+    }
+    else {
+        if (wantOutline) {
+            drawDotsColored(points, outline, size, 0.8f);
+        }
+        drawDotsColored(points, colors, size, 0.0f);
     }
 }
 
@@ -298,8 +518,40 @@ void CanvasRenderer::drawLine(float x1, float y1, float x2, float y2, const QCol
     mCircleProgram->release();
 }
 
+void CanvasRenderer::drawFilledRect(float x, float y, float w, float h, const QColor &color)
+{
+    mRectProgram->bind();
+
+    QMatrix4x4 projection;
+    projection.ortho(0, mWidth, 0, mHeight, -1, 1);
+    mRectProgram->setUniformValue("projection", projection);
+    mRectProgram->setUniformValue("fillColor",
+            (GLfloat) color.redF(), (GLfloat) color.greenF(),
+            (GLfloat) color.blueF(), (GLfloat) color.alphaF());
+
+    glBindVertexArray(mRectVao);
+
+    float vertices[4][2] = {
+        { x,     y     },
+        { x,     y + h },
+        { x + w, y + h },
+        { x + w, y     },
+    };
+
+    glBindBuffer(GL_ARRAY_BUFFER, mRectVbo);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+
+    glBindVertexArray(0);
+
+    mRectProgram->release();
+}
+
 void CanvasRenderer::drawSpectrogram(
         int xOffset,
+        int headIndex,
         int chunkSize1,
         int chunkSize2,
         int totalSize,
@@ -365,9 +617,17 @@ void CanvasRenderer::drawSpectrogram(
     float y2 = h;
     float y1 = 0;
 
-    float texOffX = float(xOffset) / 2048.0f;
-    float texX1 = texOffX - float(totalSize + 1.0f) / 2048.0f;
-    float texX2 = texOffX;
+    // Exact texel-center mapping. The old code spread `totalSize` slice columns
+    // across a span of totalSize+1 columns anchored at the newest edge, so content
+    // was progressively displaced toward the left of the view -- and since the
+    // visible slice count oscillates by one as slices enter and leave the window on
+    // different frames, the whole texture visibly breathed forward/back by 1-2
+    // columns. Quad edge x2 is the newest slice's time, whose texel center is
+    // head-0.5; x1 is the oldest visible slice's time, texel center
+    // head-(totalSize-1)-0.5. Negative coordinates are fine: wrap S is GL_REPEAT.
+    const float head = float(headIndex % 2048);
+    float texX2 = (head - 0.5f) / 2048.0f;
+    float texX1 = (head - float(totalSize) + 0.5f) / 2048.0f;
     float texY1 = 0.0f;
     float texY2 = 4095.0f / 4098.0f;
 
@@ -516,6 +776,23 @@ void CanvasRenderer::initFonts()
     FT_Done_FreeType(ft);
 }
 
+void CanvasRenderer::ensureFonts()
+{
+    if (mFontNormal != nullptr
+            && mFontsBuiltDpr == mDevicePixelRatio
+            && mFontsBuiltDpi == mDpi
+            && mFontsBuiltZoomText == mZoomScaleText) {
+        return;
+    }
+
+    deleteFonts();
+    initFonts();
+
+    mFontsBuiltDpr = mDevicePixelRatio;
+    mFontsBuiltDpi = mDpi;
+    mFontsBuiltZoomText = mZoomScaleText;
+}
+
 void CanvasRenderer::initShaders()
 {
     mTextProgram = createShaderProgram(Shaders::textVertex, Shaders::textFragment);
@@ -553,6 +830,58 @@ void CanvasRenderer::initShaders()
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
+
+    mRectProgram = createShaderProgram(Shaders::rectVertex, Shaders::rectFragment);
+
+    glGenVertexArrays(1, &mRectVao);
+    glGenBuffers(1, &mRectVbo);
+    glBindVertexArray(mRectVao);
+    glBindBuffer(GL_ARRAY_BUFFER, mRectVbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 2 * 4, nullptr, GL_DYNAMIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), 0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    mDotsProgram = createShaderProgram(Shaders::dotsVertex, Shaders::dotsFragment);
+
+    const int locCorner = mDotsProgram->attributeLocation("corner");
+    const int locCenter = mDotsProgram->attributeLocation("center");
+    const int locRadius = mDotsProgram->attributeLocation("radiusBase");
+    const int locDotColor = mDotsProgram->attributeLocation("dotColor");
+
+    glGenVertexArrays(1, &mDotsVao);
+    glGenBuffers(1, &mDotsVbo);
+    glBindVertexArray(mDotsVao);
+    glBindBuffer(GL_ARRAY_BUFFER, mDotsVbo);
+    glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_STREAM_DRAW);
+    glEnableVertexAttribArray(locCorner);
+    glVertexAttribPointer(locCorner, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *) 0);
+    glEnableVertexAttribArray(locCenter);
+    glVertexAttribPointer(locCenter, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *) (2 * sizeof(float)));
+    glEnableVertexAttribArray(locRadius);
+    glVertexAttribPointer(locRadius, 1, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *) (4 * sizeof(float)));
+    glEnableVertexAttribArray(locDotColor);
+    glVertexAttribPointer(locDotColor, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *) (5 * sizeof(float)));
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    mRibbonProgram = createShaderProgram(Shaders::ribbonVertex, Shaders::ribbonFragment);
+
+    const int locPos = mRibbonProgram->attributeLocation("pos");
+    const int locVColor = mRibbonProgram->attributeLocation("vcolor");
+
+    glGenVertexArrays(1, &mRibbonVao);
+    glGenBuffers(1, &mRibbonVbo);
+    glBindVertexArray(mRibbonVao);
+    glBindBuffer(GL_ARRAY_BUFFER, mRibbonVbo);
+    glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_STREAM_DRAW);
+    glEnableVertexAttribArray(locPos);
+    glVertexAttribPointer(locPos, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *) 0);
+    glEnableVertexAttribArray(locVColor);
+    glVertexAttribPointer(locVColor, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *) (2 * sizeof(float)));
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
 }
 
 void CanvasRenderer::deleteFonts()
@@ -560,6 +889,10 @@ void CanvasRenderer::deleteFonts()
     delete mFontNormal;
     delete mFontSmall;
     delete mFontSmaller;
+
+    mFontNormal = nullptr;
+    mFontSmall = nullptr;
+    mFontSmaller = nullptr;
 }
 
 void CanvasRenderer::deleteShaders()
@@ -568,9 +901,21 @@ void CanvasRenderer::deleteShaders()
     glDeleteVertexArrays(1, &mTextVao);
     glDeleteBuffers(1, &mTextVbo);
 
-    delete mSpecProgram; 
+    delete mSpecProgram;
     glDeleteVertexArrays(1, &mSpecVao);
     glDeleteBuffers(1, &mSpecVbo);
+
+    delete mRectProgram;
+    glDeleteVertexArrays(1, &mRectVao);
+    glDeleteBuffers(1, &mRectVbo);
+
+    delete mDotsProgram;
+    glDeleteVertexArrays(1, &mDotsVao);
+    glDeleteBuffers(1, &mDotsVbo);
+
+    delete mRibbonProgram;
+    glDeleteVertexArrays(1, &mRibbonVao);
+    glDeleteBuffers(1, &mRibbonVbo);
 }
 
 void CanvasRenderer::initTexture(GLuint &texture, int width, int height)
@@ -590,9 +935,22 @@ QOpenGLShaderProgram *CanvasRenderer::createShaderProgram(
         const char *vertexSource, const char *fragmentSource)
 {
     auto program = new QOpenGLShaderProgram();
-    program->addCacheableShaderFromSourceCode(QOpenGLShader::Vertex, vertexSource);
-    program->addCacheableShaderFromSourceCode(QOpenGLShader::Fragment, fragmentSource);
-    program->link();
+
+    if (!program->addCacheableShaderFromSourceCode(QOpenGLShader::Vertex, vertexSource)) {
+        std::cout << "Gui::CanvasRenderer] Vertex shader failed to compile: "
+                  << program->log().toStdString() << std::endl;
+    }
+
+    if (!program->addCacheableShaderFromSourceCode(QOpenGLShader::Fragment, fragmentSource)) {
+        std::cout << "Gui::CanvasRenderer] Fragment shader failed to compile: "
+                  << program->log().toStdString() << std::endl;
+    }
+
+    if (!program->link()) {
+        std::cout << "Gui::CanvasRenderer] Shader program failed to link: "
+                  << program->log().toStdString() << std::endl;
+    }
+
     return program;
 }
 

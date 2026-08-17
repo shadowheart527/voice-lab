@@ -56,7 +56,9 @@ void Spectrogram::processData(const rpm::vector<double>& overlap, double sampleR
 
     mDataStore->beginWrite();
     
-    mDataStore->getSpectrogram().insert(getCenteredTime() - (fftSamples / 2.0) / fsView, {fftVector, fsView});
+    // The FFT sliding window (mData) ends at the current block time, so its center is
+    // half the FFT length (in view-rate samples) before that.
+    mDataStore->getSpectrogram().insert(getEndTime() - (fftSamples / 2.0) / fsView, {fftVector, fsView});
 
     mDataStore->endWrite();
 }

@@ -5,11 +5,15 @@
 #include <QOpenGLShaderProgram>
 #include <QQuickFramebufferObject>
 #include <QColor>
+#include <limits>
 #include <string>
 
 #include "font.h"
 #include "shaders/spec.h"
 #include "shaders/circle.h"
+#include "shaders/rect.h"
+#include "shaders/dots.h"
+#include "shaders/ribbon.h"
 #include "../context/datastore.h"
 
 namespace Main {
@@ -41,14 +45,29 @@ namespace Gui {
         QRect textBoundsSmaller(const std::string &text);
 
         void drawScatterWithOutline(const rpm::vector<QPointF> &points, float radius, const QColor &fillColor, const QColor &outlineColor = Qt::black);
+
+        // Track with a per-point color and a constant identity outline, drawn either
+        // as outlined dots or as a connected ribbon with rounded joints.
+        void drawPolyTrack(const rpm::vector<QPointF> &points,
+                           const rpm::vector<QColor> &colors,
+                           float size, bool asLine, const QColor &outlineColor);
+
+        // Filled area chart strip: the polyline is a boundary, with one color
+        // filled below it (down to yBottom) and another above (up to yTop).
+        void drawAreaStrip(const rpm::vector<QPointF> &points,
+                           float yTop, float yBottom,
+                           const QColor &above, const QColor &below);
     
         void drawPoint(const QPointF &point, float radius, const QColor &color);
 
         void drawLine(float x1, float y1, float x2, float y2, const QColor &color, float thickness);
 
+        void drawFilledRect(float x, float y, float w, float h, const QColor &color);
+
         void prepareSpectrogramDraw();
         void drawSpectrogram(
                 int xOffset,
+                int headIndex,
                 int chunkSize1,
                 int chunkSize2,
                 int totalSize,
@@ -70,6 +89,7 @@ namespace Gui {
 
     private:
         void initFonts();
+        void ensureFonts();
         void initShaders();
         void deleteFonts();
         void deleteShaders();
@@ -81,27 +101,49 @@ namespace Gui {
         void drawTextOutlined(Font *font, float x, float y, const QColor &color, const std::string &text, const QColor &outlineColor = Qt::black);
         QRect textBounds(Font *font, const std::string &text);
 
-        Main::RenderContext *mRenderContext;
+        Main::RenderContext *mRenderContext = nullptr;
 
-        double mDevicePixelRatio;
-        int mWidth, mHeight;
-        double mDpi;
-        double mZoomScale, mZoomScaleText;
+        double mDevicePixelRatio = 1.0;
+        int mWidth = 0, mHeight = 0;
+        double mDpi = 96.0;
+        double mZoomScale = 1.0, mZoomScaleText = 1.0;
 
-        Font *mFontNormal;
-        Font *mFontSmall;
-        Font *mFontSmaller;
+        // Parameters the current font atlases were rasterised with, so ensureFonts()
+        // can skip rebuilding them when nothing relevant has changed. NaN forces the
+        // first build.
+        double mFontsBuiltDpr = std::numeric_limits<double>::quiet_NaN();
+        double mFontsBuiltDpi = std::numeric_limits<double>::quiet_NaN();
+        double mFontsBuiltZoomText = std::numeric_limits<double>::quiet_NaN();
 
-        QOpenGLShaderProgram *mTextProgram;
-        GLuint mTextVao, mTextVbo;
+        Font *mFontNormal = nullptr;
+        Font *mFontSmall = nullptr;
+        Font *mFontSmaller = nullptr;
 
-        QOpenGLShaderProgram *mSpecProgram;
-        GLuint mSpecVao, mSpecVbo;
+        QOpenGLShaderProgram *mTextProgram = nullptr;
+        GLuint mTextVao = 0, mTextVbo = 0;
 
-        QOpenGLShaderProgram *mCircleProgram;
-        GLuint mCircleVao, mCircleVbo;
+        QOpenGLShaderProgram *mSpecProgram = nullptr;
+        GLuint mSpecVao = 0, mSpecVbo = 0;
 
-        GLuint mSpecTex;
+        QOpenGLShaderProgram *mCircleProgram = nullptr;
+        GLuint mCircleVao = 0, mCircleVbo = 0;
+
+        QOpenGLShaderProgram *mRectProgram = nullptr;
+        GLuint mRectVao = 0, mRectVbo = 0;
+
+        QOpenGLShaderProgram *mDotsProgram = nullptr;
+        GLuint mDotsVao = 0, mDotsVbo = 0;
+
+        QOpenGLShaderProgram *mRibbonProgram = nullptr;
+        GLuint mRibbonVao = 0, mRibbonVbo = 0;
+
+        void drawDotsColored(const rpm::vector<QPointF> &points,
+                             const rpm::vector<QColor> &colors,
+                             float radius, float radiusAdd);
+        void drawRibbon(const rpm::vector<QPointF> &points,
+                        const rpm::vector<QColor> &colors, float width);
+
+        GLuint mSpecTex = 0;
     };
 
 }

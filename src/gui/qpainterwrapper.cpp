@@ -79,6 +79,8 @@ static std::string numberToString(double val)
 
 void QPainterWrapper::drawTimeAxis()
 {
+    const QColor axisFg = mLightMode ? QColor(45, 40, 58) : QColor(255, 255, 255);
+    const QColor axisBg = mLightMode ? QColor(250, 249, 252) : QColor(0, 0, 0);
     rpm::vector<double> majorTicks;
     rpm::vector<double> minorTicks;
     rpm::vector<double> minorMinorTicks;
@@ -118,9 +120,9 @@ void QPainterWrapper::drawTimeAxis()
                 break;
             }
         }
-        p->drawLine(x, y1, x, y1 - 8, Qt::white, 3);
+        p->drawLine(x, y1, x, y1 - 8, axisFg, 3);
         if (!covered && val >= 0) {
-            p->drawTextSmallOutlined(x - rect.width() / 2, y1 - 10, Qt::white, valstr, Qt::black);
+            p->drawTextSmallOutlined(x - rect.width() / 2, y1 - 10, axisFg, valstr, axisBg);
             for (int tx = rect.x(); tx <= rect.x() + rect.width(); ++tx) {
                 if (tx >= 0 && tx < bits.size())
                     bits[tx] = true;
@@ -141,9 +143,9 @@ void QPainterWrapper::drawTimeAxis()
                 break;
             }
         }
-        p->drawLine(x, y1, x, y1 - 4, Qt::white, 2);
+        p->drawLine(x, y1, x, y1 - 4, axisFg, 2);
         if (!covered) {
-            p->drawTextSmallerOutlined(x - rect.width() / 2, y1 - 10, Qt::white, valstr, Qt::black);
+            p->drawTextSmallerOutlined(x - rect.width() / 2, y1 - 10, axisFg, valstr, axisBg);
             for (int tx = rect.x(); tx <= rect.x() + rect.width(); ++tx) {
                 if (tx >= 0 && tx < bits.size())
                     bits[tx] = true;
@@ -153,12 +155,14 @@ void QPainterWrapper::drawTimeAxis()
     
     for (const double val : minorMinorTicks) {
         const double x = mapTimeToX(val);
-        p->drawLine(x, y1, x, y1 - 2, Qt::white, 1.5);
+        p->drawLine(x, y1, x, y1 - 2, axisFg, 1.5);
     }
 }
 
 void QPainterWrapper::drawFrequencyScale()
 {
+    const QColor axisFg = mLightMode ? QColor(45, 40, 58) : QColor(255, 255, 255);
+    const QColor axisBg = mLightMode ? QColor(250, 249, 252) : QColor(0, 0, 0);
     rpm::vector<double> majorTicks;
     rpm::vector<double> minorTicks;
     rpm::vector<double> minorMinorTicks;
@@ -264,8 +268,8 @@ void QPainterWrapper::drawFrequencyScale()
         if (covered) {
             continue;
         }
-        p->drawLine(x1 - 8, y, x1, y, Qt::white, 3);
-        p->drawTextNormalOutlined(rect.x(), rect.y(), Qt::white, valstr, Qt::black);
+        p->drawLine(x1 - 8, y, x1, y, axisFg, 3);
+        p->drawTextNormalOutlined(rect.x(), rect.y(), axisFg, valstr, axisBg);
         for (int ty = rect.y(); ty <= rect.y() + rect.height(); ++ty) {
             if (ty >= 0 && ty < bits.size())
                 bits[ty] = true;
@@ -288,8 +292,8 @@ void QPainterWrapper::drawFrequencyScale()
         if (covered) {
             continue;
         }
-        p->drawLine(x1 - 6, y, x1, y, Qt::white, 2);
-        p->drawTextSmallOutlined(rect.x(), rect.y(), Qt::white, valstr, Qt::black);
+        p->drawLine(x1 - 6, y, x1, y, axisFg, 2);
+        p->drawTextSmallOutlined(rect.x(), rect.y(), axisFg, valstr, axisBg);
         for (int ty = rect.y(); ty <= rect.y() + rect.height(); ++ty) {
             if (ty >= 0 && ty < bits.size())
                 bits[ty] = true;
@@ -312,8 +316,8 @@ void QPainterWrapper::drawFrequencyScale()
         if (covered) {
             continue;
         }
-        p->drawLine(x1 - 4, y, x1, y, Qt::white, 2);
-        p->drawTextSmallerOutlined(rect.x(), rect.y(), Qt::white, valstr, Qt::black);
+        p->drawLine(x1 - 4, y, x1, y, axisFg, 2);
+        p->drawTextSmallerOutlined(rect.x(), rect.y(), axisFg, valstr, axisBg);
         for (int ty = rect.y(); ty <= rect.y() + rect.height(); ++ty) {
             if (ty >= 0 && ty < bits.size())
                 bits[ty] = true;
@@ -337,6 +341,127 @@ void QPainterWrapper::drawFrequencyTrack(
         double y = mapFrequencyToY(pitch);
 
         points.emplace_back(x, y);
+    }
+
+    p->drawScatterWithOutline(points, radius, color);
+}
+
+void QPainterWrapper::drawHudTextNormal(float x, float y, const QColor &color, const std::string &text)
+{
+    p->drawTextNormalOutlined(x, y, color, text);
+}
+
+void QPainterWrapper::drawHudTextSmall(float x, float y, const QColor &color, const std::string &text)
+{
+    p->drawTextSmallOutlined(x, y, color, text);
+}
+
+QRect QPainterWrapper::hudTextBoundsNormal(const std::string &text)
+{
+    return p->textBoundsNormal(text);
+}
+
+QRect QPainterWrapper::hudTextBoundsSmall(const std::string &text)
+{
+    return p->textBoundsSmall(text);
+}
+
+const QVector<QRgb>& QPainterWrapper::lightCmap()
+{
+    static QVector<QRgb> map;
+    if (map.isEmpty()) {
+        struct Anchor { double t; int r, g, b; };
+        static const Anchor anchors[] = {
+            { 0.00, 252, 251, 254 },
+            { 0.25, 233, 222, 248 },
+            { 0.50, 178, 122, 231 },
+            { 0.75, 103, 38, 163 },
+            { 1.00, 28, 8, 48 },
+        };
+        map.resize(256);
+        for (int i = 0; i < 256; ++i) {
+            const double t = i / 255.0;
+            int a = 0;
+            while (a < 3 && anchors[a + 1].t < t) ++a;
+            const double f = (t - anchors[a].t) / (anchors[a + 1].t - anchors[a].t);
+            const int r = (int) std::lround(anchors[a].r + f * (anchors[a + 1].r - anchors[a].r));
+            const int g = (int) std::lround(anchors[a].g + f * (anchors[a + 1].g - anchors[a].g));
+            const int b = (int) std::lround(anchors[a].b + f * (anchors[a + 1].b - anchors[a].b));
+            map[i] = qRgb(r, g, b);
+        }
+    }
+    return map;
+}
+
+void QPainterWrapper::setLightMode(bool light)
+{
+    mLightMode = light;
+}
+
+void QPainterWrapper::drawHudTrack(const rpm::vector<QPointF>& points,
+        const rpm::vector<QColor>& colors, float size, bool asLine,
+        const QColor &outline)
+{
+    p->drawPolyTrack(points, colors, size, asLine, outline);
+}
+
+void QPainterWrapper::drawHudArea(const rpm::vector<QPointF>& points, float yTop,
+        float yBottom, const QColor &above, const QColor &below)
+{
+    p->drawAreaStrip(points, yTop, yBottom, above, below);
+}
+
+void QPainterWrapper::drawGenderTrack(
+        const rpm::vector<std::pair<double, double>>& trackPoints,
+        const rpm::vector<QColor>& colors,
+        float size, bool asLine, const QColor &identity)
+{
+    rpm::vector<QPointF> screen;
+    screen.reserve(trackPoints.size());
+    for (const auto& [time, frequency] : trackPoints) {
+        screen.emplace_back(mapTimeToX(time), mapFrequencyToY(frequency));
+    }
+    p->drawPolyTrack(screen, colors, size, asLine, identity);
+}
+
+void QPainterWrapper::drawHudRect(float x, float y, float w, float h, const QColor &color)
+{
+    p->drawFilledRect(x, y, w, h, color);
+}
+
+void QPainterWrapper::drawHudDot(float x, float y, float radius, const QColor &fill)
+{
+    rpm::vector<QPointF> pt { QPointF(x, y) };
+    p->drawScatterWithOutline(pt, radius, fill);
+}
+
+void QPainterWrapper::drawTargetBand(double minFrequency, double maxFrequency, const QColor &color)
+{
+    const double yLo = mapFrequencyToY(minFrequency);
+    const double yHi = mapFrequencyToY(maxFrequency);
+    const double yTop = std::min(yLo, yHi);
+    const double height = std::abs(yLo - yHi);
+    const int width = viewport().width();
+
+    // Modest fill, strong edges: over a bright spectrogram a translucent fill alone
+    // disappears, and it's the edge lines that make the band readable.
+    QColor fill = color;
+    fill.setAlphaF(mLightMode ? 0.24 : 0.26);
+    p->drawFilledRect(0, (float) yTop, (float) width, (float) height, fill);
+
+    p->drawLine(0, (float) yLo, (float) width, (float) yLo, color, 2.2f);
+    p->drawLine(0, (float) yHi, (float) width, (float) yHi, color, 2.2f);
+}
+
+void QPainterWrapper::drawFrequencyTrack(
+            const rpm::vector<std::pair<double, double>>& trackPoints,
+            float radius,
+            const QColor &color)
+{
+    rpm::vector<QPointF> points;
+
+    for (const auto& [time, frequency] : trackPoints) {
+        points.emplace_back(mapTimeToX(time), mapFrequencyToY(frequency));
     }
 
     p->drawScatterWithOutline(points, radius, color);

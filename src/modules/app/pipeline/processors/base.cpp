@@ -13,7 +13,11 @@ BaseProcessor::BaseProcessor(double frameSpace, double frameLength)
 
 bool BaseProcessor::canProcess(double timeNow) const
 {
-    return timeNow - mTime >= mFrameSpace;
+    // Slack of half a millisecond: timeNow accumulates in floating-point granularity
+    // steps, so an exact >= comparison intermittently skips a tick when frameSpace is
+    // an exact multiple of the granularity (e.g. both 20 ms), halving the update rate
+    // for that frame.
+    return timeNow - mTime >= mFrameSpace - 0.0005;
 }
 
 void BaseProcessor::process(const rpm::vector<double>& slidingWindow, double sampleRate, double timeNow)
@@ -25,6 +29,13 @@ void BaseProcessor::process(const rpm::vector<double>& slidingWindow, double sam
     std::copy(std::prev(slidingWindow.end(), frameSamples), slidingWindow.end(),
             mData.begin());
 
+    // Set mTime before running the analysis: getCenteredTime() is called from inside
+    // processData() to timestamp the results, and with the old order (mTime updated
+    // after) every inserted point carried the PREVIOUS frame's time -- a full
+    // frameSpace of systematic lag, and misalignment between the tracks and the
+    // spectrogram.
+    mTime = timeNow;
+
 #ifdef _WIN32
     try {
         processData(mData, sampleRate);
@@ -35,8 +46,6 @@ void BaseProcessor::process(const rpm::vector<double>& slidingWindow, double sam
 #else
     processData(mData, sampleRate);
 #endif
-
-    mTime = timeNow;
 }
 
 double BaseProcessor::getFrameSpace() const
@@ -51,5 +60,12 @@ double BaseProcessor::getFrameLength() const
 
 double BaseProcessor::getCenteredTime() const
 {
-    return mTime + mFrameLength / 2;
+    // mTime is the END of the analysed window (the current block time), so the
+    // window's center sits half a frame length earlier.
+    return mTime - mFrameLength / 2;
+}
+
+double BaseProcessor::getEndTime() const
+{
+    return mTime;
 }

@@ -12,10 +12,11 @@ static std::array supportedAudioBackends {
 #ifdef AUDIO_USE_ALSA
     Audio::Backend::ALSA,
 #endif
-// Disable PulseAudio backend regardless because of latency issues.
-/*#ifdef AUDIO_USE_PULSE
+// Re-enabled: the latency issue was the default (very large) server fragment size,
+// which openCaptureStream now overrides with an explicit ~20 ms fragsize.
+#ifdef AUDIO_USE_PULSE
     Audio::Backend::Pulse,
-#endif*/
+#endif
 #ifdef AUDIO_USE_PORTAUDIO
     Audio::Backend::PortAudio,
 #endif
@@ -34,7 +35,16 @@ Audio::Backend Main::getDefaultAudioBackend()
 #elif defined(ANDROID) || defined(__ANDROID__)
     return Audio::Backend::Oboe;
 #elif defined(__linux)
-    return Audio::Backend::PortAudio; // FIXME: alsa causes really high CPU usage
+    // Prefer PulseAudio where it is available. On a PipeWire (or PulseAudio) desktop
+    // the PortAudio backend does not follow the server's default source -- it opens
+    // ALSA's "default" PCM and captures silence -- and it spams ALSA/JACK enumeration
+    // errors on the way. The Pulse backend resolves the real default source.
+    // ALSA is still avoided as a default: it causes really high CPU usage.
+#  ifdef AUDIO_USE_PULSE
+    return Audio::Backend::Pulse;
+#  else
+    return Audio::Backend::PortAudio;
+#  endif
 #elif defined(__EMSCRIPTEN__)
     return Audio::Backend::WebAudio;
 #else

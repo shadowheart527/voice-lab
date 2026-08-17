@@ -6,6 +6,7 @@
 #include <QQmlContext>
 #include <iostream>
 #include <chrono>
+#include <cstdlib>
 
 using namespace Main;
 using namespace std::chrono_literals;
@@ -69,6 +70,29 @@ GuiContext::GuiContext(Config *config, RenderContext *renderContext, DataVisWrap
 
     canvasItem->installEventFilter(this);
     window->installEventFilter(this);
+
+    // Opt-in probe (IF_DEBUG_JITTER=1): timestamp every actual buffer swap. The
+    // in-render probe measures when we draw; this measures when frames are handed
+    // to the compositor -- the two can disagree, and the difference is invisible
+    // to any render-side measurement.
+    static const bool debugJitter = (std::getenv("IF_DEBUG_JITTER") != nullptr);
+    if (debugJitter) {
+        QObject::connect(window, &QQuickWindow::frameSwapped, [] {
+            const auto wall = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count();
+            std::cout << "SWP]," << wall << std::endl;
+        });
+    }
+
+    // The config was historically written only in ~Config(), which never runs
+    // here: Qt's FBO-node teardown segfaults kill the process first, so no
+    // setting ever survived a restart. Save while the event loop is still
+    // healthy instead: on quit, and every 30 s as a backstop against crashes.
+    QObject::connect(mApp.get(), &QCoreApplication::aboutToQuit,
+                     [this] { mConfig->save(); });
+    auto autosave = new QTimer(mApp.get());
+    QObject::connect(autosave, &QTimer::timeout, [this] { mConfig->save(); });
+    autosave->start(30000);
 
     window->show();
 }

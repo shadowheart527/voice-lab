@@ -6,6 +6,7 @@
 #include "audiocontext.h"
 #include "rendercontext.h"
 #include "guicontext.h"
+#include "livefeed.h"
 #include "datastore.h"
 #include "views/views.h"
 #include "config.h"
@@ -98,6 +99,7 @@ namespace Main {
         std::unique_ptr<AudioContext> mAudioContext;
         std::unique_ptr<RenderContext> mRenderContext;
         std::unique_ptr<GuiContext> mGuiContext;
+        std::unique_ptr<LiveFeed> mLiveFeed;
 
         rpm::map<std::string, std::unique_ptr<AbstractView>> mViews;
         

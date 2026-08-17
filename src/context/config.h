@@ -32,7 +32,20 @@ namespace Main {
         Q_PROPERTY(bool viewShowPitch       READ getViewShowPitch               WRITE setViewShowPitch          NOTIFY viewShowPitchChanged)
         Q_PROPERTY(bool viewShowFormants    READ getViewShowFormants            WRITE setViewShowFormants       NOTIFY viewShowFormantsChanged)
         Q_PROPERTY(bool paused              READ isPaused                       WRITE setPaused                 NOTIFY pausedChanged)
-    
+        Q_PROPERTY(double targetPitchMin    READ getTargetPitchMin              WRITE setTargetPitchMin         NOTIFY targetPitchMinChanged)
+        Q_PROPERTY(double targetPitchMax    READ getTargetPitchMax              WRITE setTargetPitchMax         NOTIFY targetPitchMaxChanged)
+        Q_PROPERTY(bool viewShowTargetBand  READ getViewShowTargetBand          WRITE setViewShowTargetBand     NOTIFY viewShowTargetBandChanged)
+        Q_PROPERTY(bool viewShowHud         READ getViewShowHud                 WRITE setViewShowHud            NOTIFY viewShowHudChanged)
+        Q_PROPERTY(bool uiShowSidebar       READ getUiShowSidebar               WRITE setUiShowSidebar          NOTIFY uiShowSidebarChanged)
+        Q_PROPERTY(bool analysisDenoise     READ getAnalysisDenoise             WRITE setAnalysisDenoise        NOTIFY analysisDenoiseChanged)
+        Q_PROPERTY(bool viewShowFormantBands READ getViewShowFormantBands       WRITE setViewShowFormantBands   NOTIFY viewShowFormantBandsChanged)
+        Q_PROPERTY(bool uiLightMode         READ getUiLightMode                 WRITE setUiLightMode            NOTIFY uiLightModeChanged)
+        Q_PROPERTY(bool viewTrackLines      READ getViewTrackLines              WRITE setViewTrackLines         NOTIFY viewTrackLinesChanged)
+        Q_PROPERTY(bool viewGenderColors    READ getViewGenderColors            WRITE setViewGenderColors       NOTIFY viewGenderColorsChanged)
+        Q_PROPERTY(bool viewShowHistory     READ getViewShowHistory             WRITE setViewShowHistory        NOTIFY viewShowHistoryChanged)
+        Q_PROPERTY(double viewHistorySpan   READ getViewHistorySpan             WRITE setViewHistorySpan        NOTIFY viewHistorySpanChanged)
+        Q_PROPERTY(bool viewHistoryArea     READ getViewHistoryArea             WRITE setViewHistoryArea        NOTIFY viewHistoryAreaChanged)
+
     signals:
         void pitchAlgorithmChanged(int);
         void linpredAlgorithmChanged(int);
@@ -50,10 +63,25 @@ namespace Main {
         void viewShowPitchChanged(bool);
         void viewShowFormantsChanged(bool);
         void pausedChanged(bool);
+        void targetPitchMinChanged(double);
+        void targetPitchMaxChanged(double);
+        void viewShowTargetBandChanged(bool);
+        void viewShowHudChanged(bool);
+        void uiShowSidebarChanged(bool);
+        void analysisDenoiseChanged(bool);
+        void viewShowFormantBandsChanged(bool);
+        void uiLightModeChanged(bool);
+        void viewTrackLinesChanged(bool);
+        void viewGenderColorsChanged(bool);
+        void viewShowHistoryChanged(bool);
+        void viewHistorySpanChanged(double);
+        void viewHistoryAreaChanged(bool);
 
     public:
         Config();
         virtual ~Config();
+
+        void save();
         
         Module::Audio::Backend getAudioBackend();
         void setAudioBackend(Module::Audio::Backend b);
@@ -117,6 +145,59 @@ namespace Main {
 
         bool getViewShowFormants();
         void setViewShowFormants(bool b);
+
+        bool getViewFormantSmoothing();
+        void setViewFormantSmoothing(bool b);
+
+        bool getViewPitchSmoothing();
+        void setViewPitchSmoothing(bool b);
+
+        double getTargetPitchMin();
+        void setTargetPitchMin(double hz);
+
+        double getTargetPitchMax();
+        void setTargetPitchMax(double hz);
+
+        double getMascPitchMin();
+        double getMascPitchMax();
+
+        double getFormantBand(int formant, bool fem, bool upper);
+
+        bool getViewShowFormantBands();
+        void setViewShowFormantBands(bool b);
+
+        bool getViewShowTargetBand();
+        void setViewShowTargetBand(bool b);
+
+        bool getViewShowHud();
+        void setViewShowHud(bool b);
+
+        bool getUiShowSidebar();
+        void setUiShowSidebar(bool b);
+
+        bool getUiLightMode();
+        void setUiLightMode(bool b);
+
+        bool getViewTrackLines();
+        void setViewTrackLines(bool b);
+
+        bool getViewGenderColors();
+        void setViewGenderColors(bool b);
+
+        bool getViewShowHistory();
+        void setViewShowHistory(bool b);
+
+        double getViewHistorySpan();
+        void setViewHistorySpan(double s);
+
+        bool getViewHistoryArea();
+        void setViewHistoryArea(bool b);
+
+        bool getAnalysisDenoise();
+        void setAnalysisDenoise(bool b);
+
+        bool getFeedEnabled();
+        int getFeedPort();
 
         int getAnalysisMaxFrequency();
         int getAnalysisLpOffset();

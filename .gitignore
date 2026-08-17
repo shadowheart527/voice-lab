@@ -1,5 +1,9 @@
-/build
+/build*
 /dist
 /unused
 *.swp
 /.cache
+*.log
+
+# Bundled libtorch for the DeepFormants build: ~785 MB, downloaded separately.
+/external/libtorch/

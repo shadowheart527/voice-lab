@@ -5,6 +5,7 @@
 #include "../timetrack.h"
 #include "../analysis/analysis.h"
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <functional>
 #include <QReadWriteLock>
@@ -44,19 +45,31 @@ namespace Main {
 
         OptionalTimeTrack<double>& getPitchTrack();
 
+        // Vocal weight: formant-corrected harmonic spectral tilt in dB/octave
+        // (flat = heavy/buzzy, steep = light). Written by the pitch processor.
+        OptionalTimeTrack<double>& getWeightTrack();
+
         OptionalTimeTrack<double>& getFormantTrack(int i);
         int getFormantTrackCount() const;
         void setFormantTrackCount(int n);
 
         TimeTrack<rpm::vector<double>>& getSoundTrack();
         TimeTrack<rpm::vector<double>>& getGifTrack();
-    
+
+        // Voice activity from the denoiser (0..1). 1.0 when denoising is off, so
+        // the gate is transparent. Atomic: written by the analysis thread, read by
+        // the processors without taking the datastore lock.
+        double getVoiceActivity() const;
+        void setVoiceActivity(double p);
+
     private:
         int mTrackLength;
 
         QReadWriteLock mLock;
 
         volatile double mTime;
+
+        std::atomic<double> mVoiceActivity { 1.0 };
 
         bool mIsRealTimeStarted;
         double mRealTimeOffset;
@@ -65,6 +78,7 @@ namespace Main {
         TimeTrack<SpectrogramCoefs> mSpectrogram;
         
         OptionalTimeTrack<double> mPitchTrack;
+        OptionalTimeTrack<double> mWeightTrack;
         rpm::vector<OptionalTimeTrack<double>> mFormantTracks;
 
         TimeTrack<rpm::vector<double>> mSoundTrack;

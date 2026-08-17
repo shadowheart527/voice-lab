@@ -40,6 +40,9 @@ ContextManager::ContextManager(
       mGuiContext(std::make_unique<GuiContext>(mConfig.get(), mRenderContext.get(), &mDataVisWrapper))
 #endif
 {
+    // After GuiContext: the QApplication must exist for the feed's QTimer.
+    mLiveFeed = std::make_unique<LiveFeed>(mConfig.get(), mDataStore.get());
+
 #ifdef ENABLE_TORCH
     // Load the DF model.
     DFModelHolder::initialize(&mDfModelHolder);

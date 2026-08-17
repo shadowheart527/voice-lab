@@ -2,6 +2,10 @@
 
 #include "../../../../analysis/analysis.h"
 
+#include <chrono>
+#include <cstdlib>
+#include <iostream>
+
 using namespace Module::App::Processors;
 
 Formants::Formants(Main::Config *config, Main::DataStore *dataStore,
@@ -19,6 +23,17 @@ Formants::Formants(Main::Config *config, Main::DataStore *dataStore,
 
 void Formants::processData(const rpm::vector<double>& data, double sampleRate)
 {
+    // Same voice-activity gate as the pitch processor; formant estimates on
+    // background noise are meaningless and this also skips the solver cost.
+    if (mDataStore->getVoiceActivity() < 0.5) {
+        mDataStore->beginWrite();
+        for (int i = 0; i < mDataStore->getFormantTrackCount(); ++i) {
+            mDataStore->getFormantTrack(i).insert(getCenteredTime(), std::nullopt);
+        }
+        mDataStore->endWrite();
+        return;
+    }
+
     constexpr double preemphFrequency = 200.0;
     const double preemphFactor = exp(-(2.0 * M_PI * preemphFrequency) / sampleRate);
 
@@ -41,8 +56,13 @@ void Formants::processData(const rpm::vector<double>& data, double sampleRate)
     data2[0] = mWindow[0] * (data[0] - preemphFactor * mLastSample);
     mLastSample = data[0];
 
+    static const bool debugProf = (std::getenv("IF_DEBUG_PROF") != nullptr);
+    const auto tResample0 = std::chrono::steady_clock::now();
+
     auto mLPC = mResamplerLPC.process(data2);
-    
+
+    const auto tResample1 = std::chrono::steady_clock::now();
+
     rpm::vector<double> lpc;
 
 #ifdef ENABLE_TORCH
@@ -58,7 +78,27 @@ void Formants::processData(const rpm::vector<double>& data, double sampleRate)
     }
 #endif
 
+    const auto tLpc1 = std::chrono::steady_clock::now();
+
     auto formantResult = mFormantSolver->solve(lpc.data(), (int) lpc.size(), fsLPC);
+
+    if (debugProf) {
+        const auto tSolve1 = std::chrono::steady_clock::now();
+        using us = std::chrono::microseconds;
+        std::cout << "PROFF],"
+                  << std::chrono::duration_cast<us>(tResample1 - tResample0).count() << ","
+                  << std::chrono::duration_cast<us>(tLpc1 - tResample1).count() << ","
+                  << std::chrono::duration_cast<us>(tSolve1 - tLpc1).count() << std::endl;
+    }
+
+    static const bool debugTracks = (std::getenv("IF_DEBUG_TRACKS") != nullptr);
+    if (debugTracks) {
+        std::cout << "TRKF]," << getCenteredTime();
+        for (int i = 0; i < std::min(3, (int) formantResult.formants.size()); ++i) {
+            std::cout << "," << formantResult.formants[i].frequency;
+        }
+        std::cout << std::endl;
+    }
 
     mDataStore->beginWrite();
 
