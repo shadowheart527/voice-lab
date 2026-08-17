@@ -4,7 +4,8 @@
 repository, there is a version that runs entirely in a browser, and the AI capabilities
 assessed yesterday are implemented or evaluated with measured results.
 
-Repository: <https://github.com/shadowheart527/voice-lab> (private).
+Repository: <https://github.com/shadowheart527/voice-lab> (public; the browser
+build is served from GitHub Pages, see `docs/deploy.md`).
 Working tree: `~/git/voice-lab/`.
 
 ## Consolidation

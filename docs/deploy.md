@@ -48,17 +48,14 @@ Until that is set the deploy step fails with "Pages site not found". After it is
 set, the site appears at `https://<user>.github.io/voice-lab/` — served under a
 path prefix, which is what the asset-path check above exists to protect.
 
-Two things to know before publishing, both consequences of this repository being
-private:
-
-- **Pages from a private repository needs a paid plan** (Pro, Team or
-  Enterprise). On a free plan the option is unavailable; the private routes below
-  work regardless.
-- **The published site is public even though the repository is not.** Access
-  control for Pages exists only on Enterprise. The URL is unlisted rather than
-  secret: anyone who has it can load the page. Nothing about your voice is
-  exposed by that — there is no server to store anything — but the page itself,
-  including anything you have written into the interface, is world-readable.
+The repository is public, which is what makes this route available: Pages from a
+private repository needs a paid plan (Pro, Team or Enterprise), and access
+control for Pages exists only on Enterprise, so a Pages site is world-readable
+either way. The URL is unlisted rather than secret — anyone who has it can load
+the page. Nothing about your voice is exposed by that, since there is no server
+and no upload; it is the page and the repository that are public, not any
+recording. If that stops being the trade you want, the tailnet route below
+publishes nothing at all.
 
 ### The AGPL source offer
 
@@ -68,14 +65,13 @@ AGPL's network clause treats serving the page to other people as distribution, s
 a public deployment has to offer those people its source. Running it locally or
 across your own devices triggers nothing.
 
-The build satisfies this without making the repository public: it ships
-`LICENSE` and `source/voice-lab-browser-src.tar.gz` — the app, the calibration
-harness, the table generator and the upstream statistics it reads, stamped with
-the revision — and links both from the page footer. `check-dist.mjs` fails the
-build if that footer link is missing, so the offer cannot quietly disappear.
-
-If you later make the repository public, a link to it is a simpler answer and the
-archive becomes redundant.
+The public repository already answers this, but the build does not depend on that
+staying true: it ships `LICENSE` and `source/voice-lab-browser-src.tar.gz` — the
+app, the calibration harness, the table generator and the upstream statistics it
+reads, stamped with the revision it was built from — and links both from the page
+footer. `check-dist.mjs` fails the build if that footer link is missing. The
+archive is the more precise answer of the two anyway, because it is the source of
+the exact revision being served rather than of whatever `main` happens to be.
 
 ### Publishing the neural probe model
 
