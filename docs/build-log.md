@@ -158,6 +158,21 @@ anywhere upstream of the analysis at default settings. There is a usable operati
 limited attenuation setting, and it is not the default. The existing gate-only RNNoise
 arrangement stands.
 
+### PESTO, and a third bug it exposed
+
+The neural pitch tracker is not worth adopting: 6 to 10 times less accurate than the engine's
+existing trackers on clean speech, and it invents 8 to 11 cents of frame-to-frame jitter,
+the same order as real vibrato, so it would blur exactly the hold-steady drills it would be
+used for. It is genuinely excellent on badly degraded audio, which makes it worth remembering
+for archival material rather than live feedback.
+
+Benchmarking it turned up a real defect in the engine, though. The MPM tracker seeded its
+autocorrelation normaliser with an absolute 0.02 floor on a quantity that scales with signal
+power, so on quiet input the division stopped normalising and it reported unvoiced. Measured
+on a 200 Hz vowel it started dropping frames at -15 dBFS and was completely dead by -18 dBFS,
+and a well-recorded voice sits around -20 dBFS. It was failing at ordinary recording levels.
+One line; it is now scale-invariant with an identical estimate down to -73 dBFS.
+
 ### Session coaching (shipped)
 
 Covered above: deterministic observations, optional local LLM for wording only.
