@@ -2,6 +2,7 @@
 // Everything is client-side; no audio and no measurements leave the device.
 
 import { genderColor, noteName, fullnessCell } from './dsp/gender.js';
+import { SessionRecorder } from './session.js';
 
 const TRAIL_SECONDS = 6;
 const TARGET_MIN = 165, TARGET_MAX = 220;
@@ -13,6 +14,7 @@ const ctx = cv.getContext('2d');
 let view = 'gender';
 let running = false;
 let worker = null, audioCtx = null, stream = null, node = null;
+const session = new SessionRecorder(TARGET_MIN, TARGET_MAX);
 const trail = [];
 let last = null;
 let voicedFrames = 0, inBandFrames = 0;
@@ -223,6 +225,7 @@ async function start() {
         const size = Number.isFinite(m.sizeR) && m.sizeR > -900
             ? Math.max(0, Math.min(1, m.sizeR)) : null;
         m.size = size;   // readouts read it off the measurement
+        session.add(m);
         const point = {
             wall: performance.now(),
             pitch: m.pitch, res: m.resonance, score: m.score,
@@ -245,8 +248,11 @@ async function start() {
     node.port.onmessage = (e) => worker.postMessage({ type: 'block', block: e.data }, [e.data.buffer]);
     src.connect(node);
 
+    session.reset();
+    voicedFrames = inBandFrames = 0;
     running = true;
     el('mic').textContent = 'Stop';
+    el('save').classList.remove('hidden');
     el('status').textContent = `live · ${Math.round(audioCtx.sampleRate / 1000)} kHz`;
     requestAnimationFrame(loop);
 }
@@ -270,6 +276,7 @@ function loop() {
 // --------------------------------------------------------------------- wire
 
 el('mic').addEventListener('click', () => (running ? stop() : start()));
+el('save').addEventListener('click', () => session.download());
 el('tabGender').addEventListener('click', () => setView('gender'));
 el('tabFullness').addEventListener('click', () => setView('fullness'));
 

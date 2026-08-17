@@ -102,18 +102,12 @@ def export_onnx(model: ECAPA_gender) -> pathlib.Path:
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     example = torch.randn(1, 16000)
 
-    batch = torch.export.Dim("batch", min=1, max=64)
-    samples = torch.export.Dim("samples", min=4000, max=16000 * 60)
+    # The TorchScript exporter is tried first on purpose: it is what produced the
+    # graph the validation numbers in README.md were measured on, it needs no
+    # onnxscript, and it emits a flat Conv/MatMul graph that onnxruntime-web and
+    # the dynamic quantiser both handle without special cases. torch.export is
+    # the fallback for when the legacy path is eventually removed.
     try:
-        torch.onnx.export(
-            model, (example,), str(ONNX_PATH),
-            input_names=["waveform"], output_names=["logits"],
-            opset_version=OPSET, dynamo=True,
-            dynamic_shapes={"x": {0: batch, 1: samples}},
-            optimize=True,
-        )
-    except Exception as exc:  # noqa: BLE001 - fall back to the legacy exporter
-        print(f"dynamo export failed ({exc}); retrying with the legacy exporter")
         torch.onnx.export(
             model, (example,), str(ONNX_PATH),
             input_names=["waveform"], output_names=["logits"],
@@ -121,6 +115,17 @@ def export_onnx(model: ECAPA_gender) -> pathlib.Path:
             dynamic_axes={"waveform": {0: "batch", 1: "samples"},
                           "logits": {0: "batch"}},
             do_constant_folding=True,
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"legacy export failed ({exc}); retrying with torch.export")
+        batch = torch.export.Dim("batch", min=1, max=64)
+        samples = torch.export.Dim("samples", min=4000, max=16000 * 60)
+        torch.onnx.export(
+            model, (example,), str(ONNX_PATH),
+            input_names=["waveform"], output_names=["logits"],
+            opset_version=OPSET, dynamo=True,
+            dynamic_shapes={"x": {0: batch, 1: samples}},
+            optimize=True,
         )
 
     size_mb = ONNX_PATH.stat().st_size / 1e6
@@ -148,10 +153,68 @@ def verify_onnx(model: ECAPA_gender, path: pathlib.Path) -> None:
         raise RuntimeError(f"ONNX graph disagrees with PyTorch (max {worst})")
 
 
+def quantize_int8(src: pathlib.Path) -> pathlib.Path:
+    """Weight-only dynamic int8, for shipping to onnxruntime-web.
+
+    The attentive-pooling MatMul is excluded. It multiplies two runtime
+    activations (attention weights x frame features) rather than a weight by an
+    activation, so dynamic quantisation hits both operands and costs far more
+    accuracy there than in any of the convolutions. Alice-Sabrina-Ivy documented
+    this on their export of the same model; the exclusion is cheap and it also
+    makes the graph slightly faster by skipping a quantise/dequantise round trip.
+    """
+    from onnxruntime.quantization import QuantType, quantize_dynamic
+    from onnxruntime.quantization.shape_inference import quant_pre_process
+
+    import onnx
+
+    # Find MatMuls with no initializer operand: those are the activation x
+    # activation products, the ones dynamic quantisation damages.
+    graph = onnx.load(str(src)).graph
+    inits = {i.name for i in graph.initializer}
+    exclude = [n.name for n in graph.node
+               if n.op_type == "MatMul" and not (set(n.input) & inits)]
+
+    prepped = src.with_name(src.stem + "_prep.onnx")
+    quant_pre_process(str(src), str(prepped), skip_symbolic_shape=False)
+    quantize_dynamic(str(prepped), str(INT8_PATH), weight_type=QuantType.QUInt8,
+                     per_channel=True, nodes_to_exclude=exclude,
+                     extra_options={"MatMulConstBOnly": True})
+    prepped.unlink(missing_ok=True)
+
+    print(f"int8:   {INT8_PATH} ({INT8_PATH.stat().st_size / 1e6:.1f} MB, "
+          f"excluded {len(exclude)} activation-x-activation MatMul node(s))")
+    return INT8_PATH
+
+
+def compare_int8(fp32: pathlib.Path, int8: pathlib.Path) -> None:
+    import onnxruntime as ort
+
+    a = ort.InferenceSession(str(fp32), providers=["CPUExecutionProvider"])
+    b = ort.InferenceSession(str(int8), providers=["CPUExecutionProvider"])
+
+    deltas = []
+    rng = np.random.default_rng(0)
+    for _ in range(8):
+        wav = (rng.standard_normal((1, 16000)) * 0.1).astype(np.float32)
+        pa = _softmax(a.run(None, {a.get_inputs()[0].name: wav})[0])[0, 1]
+        pb = _softmax(b.run(None, {b.get_inputs()[0].name: wav})[0])[0, 1]
+        deltas.append(abs(pa - pb))
+    print(f"int8 vs fp32: mean |dp| {np.mean(deltas):.4f}, max {np.max(deltas):.4f} "
+          f"(random noise, 8 windows)")
+
+
+def _softmax(x: np.ndarray) -> np.ndarray:
+    e = np.exp(x - x.max(axis=1, keepdims=True))
+    return e / e.sum(axis=1, keepdims=True)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--skip-verify", action="store_true",
                     help="skip the torchaudio front-end cross-check")
+    ap.add_argument("--no-int8", action="store_true",
+                    help="skip the quantised browser export")
     args = ap.parse_args()
 
     weights = download_weights()
@@ -160,6 +223,9 @@ def main() -> int:
         verify_frontend(model)
     path = export_onnx(model)
     verify_onnx(model, path)
+    if not args.no_int8:
+        int8 = quantize_int8(path)
+        compare_int8(path, int8)
     print("ok")
     return 0
 
