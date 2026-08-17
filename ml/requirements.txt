@@ -1,0 +1,18 @@
+# Runtime for gender_probe. Install torch from the CPU index so the venv does not
+# pull ~2 GB of CUDA payload it will never use:
+#
+#   /usr/bin/python3 -m venv ml/.venv
+#   ml/.venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch torchaudio
+#   ml/.venv/bin/pip install -r ml/requirements.txt
+#
+# Inference (probe.py) needs only onnxruntime, numpy and soundfile. torch,
+# torchaudio, safetensors and huggingface_hub are export-time only, for
+# fetch_model.py.
+
+numpy>=1.24
+onnx>=1.16
+onnxruntime>=1.17
+soundfile>=0.12
+
+huggingface_hub>=0.23
+safetensors>=0.4
