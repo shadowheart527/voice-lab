@@ -1,0 +1,249 @@
+<style>
+	.settings > label:first-child {
+		font-weight: bold;
+	}
+	#export-clips {
+		margin-right: auto;
+	}
+	section.settings .hbox {
+		display: flex;
+		align-items: center;
+	}
+	section.settings .hbox > * + * {
+		margin-left: .25em;
+	}
+	#import-export {
+		margin-top: .5em;
+		margin-bottom: .5em;
+	}
+	section.settings .hbox h2 {
+		margin: 0px;
+		margin-right: auto;
+	}
+	.example {
+		align-items: center;
+	}
+	section.settings select {
+		width: 50ch;
+		flex-shrink: 1;
+	}
+</style>
+<section class="settings">
+	<h2>Your Data</h2>
+	<div id="import-export" class="hbox">
+		<button id="export-clips">Export</button>
+		<input type="file" id="import-clips-file"/>
+		<button id="import-clips">Import</button>
+	</div>
+	<script>
+		$('#export-clips').addEventListener('click', evt => {
+			let cloneClips = JSON.parse(JSON.stringify(globalState.get('clips')));
+			for (let clip of cloneClips) delete clip.marker;
+			downloadFile('data:text/json;charset=utf-8,' + encodeURIComponent(
+				JSON.stringify(cloneClips)
+			), 'clips.json');
+		});
+		
+		$('#import-clips').addEventListener('click', evt => {
+			if ($('#import-clips-file').files.length > 0) {
+				let reader = new FileReader();
+				reader.onload = evt => {
+					let loadedClips = JSON.parse(evt.target.result);
+					globalState.set('clips', loadedClips);
+					globalState.set('playingClip', last(loadedClips));
+					globalState.set('previewClip', last(loadedClips));
+				}
+				reader.readAsText($('#import-clips-file').files[0]);
+			} else {
+				alert('You need to select the file containing your exported data.');
+			}
+		});
+	</script>
+	<hr>
+	<div class="hbox examples">
+	<h2>Examples</h2>
+		<button id="load-default-clips" onclick="loadDefaultClips()">Reload Defaults</button>
+		<button id="load-extended-clips" onclick="loadExtendedClips()">Load Extended</button>
+	</div>
+	<p>Warning: The extended set of examples may use large amounts of data.</p>
+
+	<hr>
+
+	<h2>Theme</h2>
+	<select id="theme-select">
+		<option value="Deep Dark">Deep Dark</option>
+		<option value="Light Blue">Light Blue</option>
+		<option value="Light Red">Light Red</option>
+		<option value="Popular">Popular</option>
+		<option value="Pinkin Blue">Pinkin Blue</option>
+		<option value="Pink Pank">Pink Pank</option>
+		<option value="80s">80's</option>
+		<option value="90s">90's</option>
+		<option value="00s">00's</option>
+		<option value="10s">10's</option>
+		<option value="custom">Custom</option>
+	<select>
+	<br>
+	<br>
+
+	<details id="set-colors">
+		<summary>Customize</summary>
+		Rounded Corners:
+		<input type="range" value="15" id="border-radius" />
+		<br>
+		Shadow Strength:
+		<input type="range" value="5" id="box-shadow-strength" class="proportion"  />
+		<br>
+		Shadow Spread:
+		<input type="range" value="15" id="box-shadow-spread" />
+		<br>
+		Highlight Strength:
+		<input type="range" value="0" id="highlight-strength" class="proportion" />
+		<br>
+		<br>
+
+		<input type="color" id="body-background" >
+		<label for="body-background">background color</label>
+		<br>	
+		<input type="color" id="body-color" >
+		<label for="body-color">text color</label>
+		<br>	
+		<input type="color" id="chrome-color" >
+		<label for="chrome-color">chrome color</label>
+		<br>
+		<input type="color" id="chrome-background"  >
+		<label for="chrome-background">chrome background</label>
+		<br>
+		<input type="color" id="chrome-border" >
+		<label for="chrome-border">chrome border</label>
+		<br>
+		<input type="color" id="accent" >
+		<label for="accent">accent</label>
+		<br>
+		<input type="color" id="accent-text" >
+		<label for="accent">accent text</label>
+		<br>
+		<input type="color" id="button-color" >
+		<label for="button-color">button color</label>
+		<br>
+		<input type="color" id="button-background" >
+		<label for="button-background">button background</label>
+		<br>
+		<input type="color" id="input-color" >
+		<label for="input-color">input color</label>
+		<br>
+		<input type="color" id="input-background" >
+		<label for="input-background">input background</label>
+		<br>
+
+	</details>
+	<script>
+
+		let themeState = new StateManager();
+		let themes = {% include 'themes.json' %};
+		let theme = $('#theme-select').value;
+		loadTheme(themes[theme]);
+		
+		for (let colorSelect of $$('#set-colors > input[type=color]')) {
+			if (!themeState.state.hasOwnProperty(colorSelect.id)) {
+				themeState.init(colorSelect.id, null);
+			}
+			themeState.render([colorSelect.id], current => {
+				document.body.style.setProperty('--' + colorSelect.id, current[colorSelect.id]);
+			});
+		}
+
+		for (let colorSelect of $$('#set-colors > input[type=color]')) {
+			themeState.sync(colorSelect.id, colorSelect, 'value');
+			themeState.set(colorSelect.id, colorSelect.value);
+			colorSelect.addEventListener('change', evt => {
+				$('#theme-select').value = 'custom';
+			});
+		}
+
+		for (let select of $$('#set-colors > input[type=range]')) {
+			themeState.sync(select.id, select, 'value');
+			select.addEventListener('change', evt => {
+				$('#theme-select').value = 'custom';
+			});
+		}
+
+
+		for (let select of $$('#set-colors > input[type=range]')) {
+			themeState.render([select.id], current => {
+				if (select.classList.contains('proportion')) {
+					document.body.style.setProperty('--' + select.id, current[select.id] / 100);
+				}
+				if (select.id == 'border-radius') {
+					document.body.style.setProperty('--' + select.id, (current[select.id] / 50) + 'em');
+				}
+				if (select.id == 'box-shadow-spread') {
+					document.body.style.setProperty('--' + select.id, (current[select.id] / 100) * 10 + 'px');
+				}
+			});
+		}
+
+		function doLoadTheme(theme) {
+			if (themes[theme]) {
+				loadTheme(themes[theme]);
+			} else {
+				setTimeout(() => doLoadTheme(theme), 1000);
+			}
+		}
+		$('#theme-select').addEventListener('change', evt => {
+			let theme = $('#theme-select').value;
+			doLoadTheme(theme);
+		});
+
+
+		for (let colorSelect of $$('#set-colors > input[type=color]')) {
+			if (!themeState.state.hasOwnProperty(colorSelect.id)) {
+				themeState.init(colorSelect.id, current[colorSelect.id]);
+			}
+			themeState.render([colorSelect.id], current => {
+				document.body.style.setProperty('--' + colorSelect.id, current[colorSelect.id]);
+			});
+		}
+
+		theme = $('#theme-select').value;
+		loadTheme(themes[theme]);
+
+		function nativeWidgets() {$('body').classList.remove('custom-widgets')};
+		function customWidgets() {$('body').classList.add('custom-widgets')};
+
+		function recordTheme() {
+			let theme = {};
+			for (let key in themeState.state) {
+				theme[key] = themeState.get(key);
+			}
+			alert(JSON.stringify(theme));
+		}
+		function loadTheme(theme) {
+			for (let key in theme) {
+				if (themeState.state.hasOwnProperty(key)) {
+					themeState.set(key, theme[key]);
+				}  else {
+					themeState.init(key, theme[key]);
+				}
+			}
+		}
+		function nativeStyle() {
+			whiteLight();
+			document.body.style.setProperty('--body-background', 'White');
+			document.body.style.setProperty('--body-color', 'Black');
+			document.body.style.setProperty('--chrome-color', 'WindowText');
+			document.body.style.setProperty('--chrome-background', 'Window');
+			document.body.style.setProperty('--chrome-border', 'ButtonShadow');
+			document.body.style.setProperty('--accent', 'Highlight');
+			document.body.style.setProperty('--button-color', 'ButtonText');
+			document.body.style.setProperty('--button-background', 'ButtonFace');
+			document.body.style.setProperty('--input-color', '#000000');
+			document.body.style.setProperty('--border-radius', 15 / 50 + "em");
+			document.body.style.setProperty('--box-shadow-spread', .50 * 10 + "px");
+			document.body.style.setProperty('--box-shadow-strength', '0.05');
+			document.body.style.setProperty('--highlight-strength', '0');
+			document.querySelector('input.highlight-strength').value = '0';
+			nativeWidgets();
+		}
+	</script>
+</section>

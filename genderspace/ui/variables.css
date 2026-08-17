@@ -1,0 +1,13 @@
+
+/* ======================= Variables ======================= */
+body {
+	--header-height: 2.5rem;
+	
+	{% for key in theme %}
+		--{{key}}: {{theme[key]}};
+	{% endfor %}
+
+	--box-shadow: -1px 1px var(--box-shadow-spread) var(--box-shadow-spread) rgba(0,0,0,calc(var(--box-shadow-strength)));
+	--progress-bar-background: var(--accent);
+}
+

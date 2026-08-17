@@ -1,0 +1,259 @@
+
+<section class="new-clip">
+	<style>
+		#record-voice + label + div, #upload-file + label + div {
+			margin-left: 1em;
+			padding: .5em;
+		}
+		#script-select {	
+			max-width: calc(100% - 6ch);
+		}
+		#title-input {
+			max-width: calc(100% - 16ch);
+		}
+		section.new-clip .new-clip {
+			margin-bottom: 1em;
+		}
+		.new-clip .hbox {
+			display: flex;
+			align-items: center;
+		}
+		.new-clip .hbox select, .hbox input[type=text] {
+			width: 100%;
+			flex-shrink: 1;
+		}
+		.new-clip .hbox label {
+			margin-left: 1em;
+			margin-right: .5em;
+		}
+		.new-clip .hbox label:first-child {
+			margin-left: 0px;
+		}
+		.new-clip h2 {
+			margin-top: 0px;
+		}
+		.new-clip #submit {
+			float: right;
+		}
+		#upload-file + label + div, #record-voice + label + div {
+		}
+		/* Show upload/recording elements only when that option is selected. */
+		#record-voice          + label + div { display: none; }
+		#record-voice:checked  + label + div { display: block; }
+		#upload-file           + label + div { display: none;}
+		#upload-file:checked   + label + div { display: block;}
+	</style>
+
+	<h2>Add a Clip</h2>
+
+	<div class="hbox">
+		<label for="title-input">Title</label>
+		<input type="text" id="title-input" value="Untitled"/>
+
+		<label for="color-select">Color</label>
+		<input type="color" id="color-select" value="#000000"/>
+	</div>
+
+	<br>
+
+	<!-- Script selection -->
+	<div class="hbox">
+		<label for="script-select">Script </label>
+		<select class="script" id="script-select">
+			{% include 'speech-scripts.html' %}
+		</select>
+	</div>
+	<textarea rows="6" id="transcript"></textarea>
+	<script>
+		globalState.render(['transcript'], current => {
+			$('#transcript').value = current.transcript;
+		});
+
+		function formatTranscript(value) {
+			return value.replace(/\s\s+/g, '\n').trim()
+		}
+		globalState.set('transcript', formatTranscript($('#script-select').value));
+
+		$('#script-select').addEventListener('change', evt => {
+			let value = $('#script-select').value;
+			globalState.set('transcript',  value == 'custom' ? '' : formatTranscript(value));
+		});
+
+		$('#transcript').addEventListener('change', evt => {
+			if (globalState.get('transcript') != $('#transcript').value) {
+				globalState.set('transcript', $('#transcript').value);
+				$('#script-select').value = 'custom';
+			}
+		});
+	</script>
+
+
+	<!-- Upload Options -->
+	<input type="radio" name="add-recording" id="upload-file" checked>
+	<label for="upload-file">Upload a file</label>
+	<div>
+		<input type='file' id='audio-file-input' name='recording' 
+		capture="user" accept="audio/*,video/*,audio/mpeg,audio/mp4,audio/x-aiff,audio/ogg,audio/vorbis,audio/opus,audio/vnd.wav,.wav,.mp3,.ogg,.opus,.m4a,.webm"/>
+	</div>
+	<br>
+	<input type="radio" name="add-recording" id="record-voice">
+	<label for="record-voice">Record your voice</label>
+	<div>
+		<button id="start-recording">⏺︎ Start</button>
+		<button id="stop-recording">⏹︎ Stop</button>
+		Recorded <span id="recording-count">0</span> seconds
+		<br>
+		<br>
+		<audio controls id="recording-preview"></audio>
+	</div>
+	<!-- Submit -->
+	<button id="submit" class='attention' onclick="submitAudio()">Add Clip</button>
+	<script>
+	try {
+		// record from their microphone in-browser,
+		let mediaRecorder = null;
+		let audioChunks = [];
+		let recordedAudio = null;
+		function recordAudio() {
+			let stopButton = document.querySelector("#stop-recording");
+			let startButton = document.querySelector("#start-recording");
+
+			const startRecording = () => {
+				$('#recording-count').innerHTML = '0';
+				let recordingInterval = setInterval(() => {
+					$('#recording-count').innerHTML = Number($('#recording-count').innerHTML) + 1;
+				}, 1000);
+
+				mediaRecorder.addEventListener("stop", () => {
+					clearInterval(recordingInterval);
+				});
+				stopButton.disabled = false;
+				startButton.disabled = true;
+				audioChunks = [];
+				mediaRecorder.start();
+				mediaRecorder.addEventListener("dataavailable", event => {
+					audioChunks.push(event.data);
+				});
+			}
+
+			function alertRecordingFailure(exception) {
+				alert(
+					String(window.location).slice(0, 5) == 'https'
+					?
+						  "Sorry, something went wrong. " 
+						+ "Please ensure that your microphone is connected "
+						+ "and that your browser allows us to record from it. "
+						+ "Alternately, you can try uploading a file recorded from a native app instead."
+					:
+						  "Recording in-browser is only available "
+						+ "when accessing the site over a secure connection. "
+						+ "To record, reload the page ensuring "
+						+ "that the URL starts with 'https', "
+						+ "including the 's' at the end."
+				);
+				console.error(exception);
+			}
+			if (mediaRecorder) { startRecording(); } else {
+				try { 
+					navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+						
+						mediaRecorder = new MediaRecorder(stream);
+						
+						mediaRecorder.addEventListener("stop", () => {
+							stopButton.disabled = true;
+							startButton.disabled = false;
+							const audioBlob = new Blob(audioChunks);
+							recordedAudio = audioBlob;
+
+							let reader = new FileReader(recordedAudio);	
+							reader.readAsDataURL(recordedAudio);
+							reader.addEventListener("load", () => {
+								$('#recording-preview').src = reader.result.replace(
+									/data:.*;base64/, "data:audio/wav;base64"
+								);
+								$('#recording-preview').load();
+							});
+						});
+						stopButton.addEventListener("click", () => {mediaRecorder.stop();}, false);
+						startRecording();
+					}).catch(exception => alertRecordingFailure(exception));
+				} catch(exception) { alertRecordingFailure(exception); }
+			}
+		}
+		$('#start-recording').addEventListener('click', evt => {
+			recordAudio();
+
+		});
+
+		function submitAudio() {
+
+			let clip = new Clip();
+			let formData = new FormData();
+
+			let transcriptText = $('#transcript').value;
+			formData.append('transcript', transcriptText);
+			formData.append('referrer', document.referrer);
+			formData.append('screen-width', window.screen.width);
+			formData.append('screen-height', window.screen.height);
+			formData.append('lang', navigator.language || navigator.userLanguage);
+
+			clip.transcript = transcriptText;
+			clip.title = $('#title-input').value;
+			clip.color = $('#color-select').value;
+
+			if ($('#upload-file').checked) {
+				fileInput = $('#audio-file-input')
+				if (fileInput.files.length < 1) return
+
+				let recording = fileInput.files[0];
+				formData.append('recording', recording);
+				clip.loadAudioFile(recording);
+
+			} else if ($('#record-voice').checked) {
+				formData.append('recording', recordedAudio);
+				clip.loadAudioFile(recordedAudio);
+			} else {
+				alert('Please upload a file or make a recording.');
+				return;
+			}
+
+			$('button.new-clip').classList.add('hidden');
+			$('button.new-clip + .spinner').classList.remove('hidden');
+			
+			hideModal();
+			
+			fetch('./backend.cgi', { method: 'POST', body: formData})
+			.then(response => {
+				if (!response.ok) throw new Error(response.status);
+				if (response.headers.get('Content-Length') < 2) return {};
+				return response.json();
+			}).then(data => {
+				$('button.new-clip').classList.remove('hidden');
+				$('button.new-clip + .spinner').classList.add('hidden');
+
+				console.assert(data.hasOwnProperty('phones') && data.phones.length < 1);
+				
+				clip.loadResponse(data);
+				globalState.mutate('clips', clips => clips.push(clip));
+				globalState.set('playing', false);
+				globalState.set('playingClip', clip);
+				globalState.set('previewClip', clip);
+
+			}).catch(() => {
+				alert(
+					"Sorry, we weren't able to process your recording. " +
+					"Make sure to speak clearly and ensure " +
+					"that your transcript matches the audio. " +
+					"For increased chance of success," +
+					"try using short clips with a 1-second period of silence."
+				);
+				$('button.new-clip').classList.remove('hidden');
+				$('button.new-clip + .spinner').classList.add('hidden');
+			});
+		}
+	} catch (exception) {
+		alert("An unknown error occured.");
+		console.error(exception);
+	}
+	</script>
+</section>

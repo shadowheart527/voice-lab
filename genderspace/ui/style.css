@@ -1,0 +1,145 @@
+
+/* ======================= Style ======================= */
+body {
+	line-height: 1.4;
+}
+button:hover, input:hover, select:hover, textArea:hover {
+	opacity: .8;
+}
+button:active {
+	opacity: .5;
+}
+*:focus {
+	box-shadow: 0px 0px 2px 2px var(--accent) !important;
+}
+button:hover:disabled {
+	opacity: .5;
+}
+*:disabled {
+	opacity: .5;
+}
+
+a {
+	color: var(--accent);
+}
+
+.custom-widgets button, 
+.custom-widgets  input[type=submit]
+{
+	padding-top: 0px;
+	padding-bottom: 0px;
+	vertical-align: middle;
+	background: var(--button-background);
+	color: var(--button-color);
+	border: 1px solid var(--chrome-border);
+	border-radius: var(--border-radius);
+	box-shadow: var(--box-shadow);
+}
+.custom-widgets input[type=file]::file-selector-button {
+	padding-top: 0px;
+	padding-bottom: 0px;
+	vertical-align: middle;
+	background: var(--button-background);
+	color: var(--button-color);
+	border: 1px solid var(--chrome-border);
+	border-radius: var(--border-radius);
+	box-shadow: var(--box-shadow);
+}
+
+.custom-widgets textarea, .custom-widgets select, .custom-widgets input {
+	background: var(--input-background);
+	color: var(--input-color);
+	border: 1px solid var(--chrome-border);
+	border-radius: var(--border-radius);
+	padding: .25em;
+}
+
+main > section {
+  box-shadow: inset var(--box-shadow);
+}
+
+button, 
+input[type=submit]
+{
+	height: calc(var(--header-height) - 1rem);
+}
+input[type=file]::file-selector-button {
+	height: calc(var(--header-height) - 1rem);
+}
+input, textarea, progress[value], select {
+  box-shadow: inset var(--box-shadow);
+}
+
+button, input[type=submit] {
+  position: relative;
+}
+h2 {
+	font-size: 100%;
+}
+  
+.custom-widgets button:after, 
+.custom-widgets input[type=submit]:after
+{
+  content: ' ';
+  position: absolute;
+  bottom: 0px;
+  left: 0px;
+  right: 0px;
+  top: 0px;
+  box-shadow: inset -1px 2px calc(var(--box-shadow-spread) * 1.25) 2px rgba(255,255,255, calc(var(--highlight-strength) * 1));
+  border-radius: var(--border-radius);
+}
+.tab-set button:after {
+  content: none;
+}
+
+voice-graph-2d canvas {
+	border-radius: var(--border-radius);
+}
+
+textarea {
+	width: 100%;
+	height: 8em;
+	font-family: sans-serif;
+	margin-top: 1em;
+	margin-bottom: 1em;
+}
+
+.modal {
+	border: 1px solid;
+	padding: 1em;
+	padding-bottom: 0em;
+	border-radius: var(--border-radius);
+	box-shadow: var(--box-shadow);
+}
+.modal section {
+	padding-bottom: 2em;
+}
+
+.custom-widgets ::selection {
+	background: var(--accent);
+	color: white;
+	color: var(--accent-text);
+}
+h2 {
+	margin-bottom: .5em;
+}
+h2 + p {
+	margin-top: .5em;
+}
+
+.scrolling-text-box {
+	background: var(--body-background);
+	color: var(--body-color);
+	border-radius: var(--border-radius);
+	box-shadow: inset var(--box-shadow);
+}
+
+.custom-widgets button.attention{
+	background: var(--accent);
+	color: var(--accent-text);
+	font-weight: bold;
+}
+hr {
+	border: 1px solid var(--chrome-border);
+}

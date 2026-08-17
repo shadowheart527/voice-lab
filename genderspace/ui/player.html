@@ -1,0 +1,184 @@
+
+<!-- ======================= Player ======================= -->
+<button class="play-pause iconic" title='play/pause'>
+{% include 'play-fill.svg' %}
+{% include 'pause-fill.svg' %}
+</button>
+<progress class="player" value="0" min="0"></progress>
+<audio class="clip" preload="metadata"></audio>
+<script>
+try {
+	let mediaElement = $('.clip');
+	let playPauseButton = $('button.play-pause');
+	let progressBar = $('progress.player');
+
+	document.body.addEventListener('keyup', evt => {
+		
+		if (['INPUT', 'TEXTAREA'].filter(
+			tag => tag == document.activeElement.tagName
+		).length == 0) {
+			if (evt.code == 'ArrowRight') {
+				globalState.set('playbackTime', Math.min(globalState.get('playbackTime') + 1, mediaElement.duration));
+			}
+			if (evt.code == 'ArrowLeft') {
+				globalState.set('playbackTime', Math.max(globalState.get('playbackTime') - 1, 0));
+			}
+		}
+		if (evt.code == 'Space' && ['INPUT', 'TEXTAREA', 'BUTTON', 'SUMMARY'].filter(
+			tag => tag == document.activeElement.tagName
+		).length == 0) {
+			globalState.set('playing', !globalState.get('playing'));
+		}
+	});
+
+	globalState.render(['playingClip'], current => {
+		if (current.playingClip && current.playingClip.audio) {
+			progressBar.setAttribute('max', 60);
+			mediaElement.addEventListener('loadedmetadata', updateDuration);
+			mediaElement.addEventListener('durationchange', updateDuration);
+			mediaElement.src = current.playingClip.audio;
+			globalState.set('playbackTime', 0);
+		}
+	});
+	function updateDuration(evt) {
+		if (mediaElement.duration < 1000 && mediaElement.duration != Infinity) {
+			progressBar.setAttribute('max', mediaElement.duration);
+		};
+	}
+
+	globalState.render(['playingClip'], current => {
+		progressBar.setAttribute('max', 60);
+		if (current.playingClip && current.playingClip.audio) {
+			mediaElement.addEventListener('loadedmetadata', updateDuration);
+			mediaElement.addEventListener('durationchange', updateDuration);
+			mediaElement.src = current.playingClip.audio;
+			globalState.set('playbackTime', 0);
+		}
+	})
+
+	globalState.render(['playing'], current => {
+		if (current.playing && !globalState.get('playingClip')) {
+			globalState.set('playing', false);
+			return;
+		}
+		if (current.playing) {
+			playPauseButton.classList.add('playing') ;
+			mediaElement.play();
+		} else {
+			playPauseButton.classList.remove('playing') ;
+			mediaElement.pause();
+		}
+
+	});
+	playPauseButton.addEventListener('click', evt => {
+		globalState.set('playing', !globalState.get('playing'));
+		globalState.set('previewClip', globalState.get('playingClip'));
+	});
+
+	progressBar.addEventListener('click', evt => {
+		if (globalState.get('playingClip')) {
+			let pos = (evt.pageX  - progressBar.offsetLeft) / progressBar.offsetWidth;
+			globalState.set('playbackTime', pos * mediaElement.duration);
+		}
+	})
+	
+	let dragInProgress = false;
+	progressBar.addEventListener('mousedown', evt => dragInProgress = true);
+	progressBar.addEventListener('mouseup', evt => dragInProgress = false);
+	progressBar.addEventListener('mousemove', evt => {
+		if (dragInProgress && globalState.get('playingClip')) {
+			let pos =  (evt.pageX  - progressBar.offsetLeft) 
+			          / progressBar.offsetWidth;
+			globalState.set('playbackTime', pos * mediaElement.duration);
+		}
+	})
+
+	globalState.render(['playbackTime'], current => {
+		if (current.playbackTime && 
+			current.playbackTime != mediaElement.currentTime
+		) {
+			 mediaElement.currentTime = current.playbackTime;
+		}
+
+		progressBar.setAttribute('value', current.playbackTime);
+		if (current.playbackTime >= progressBar.max && globalState.get('playing') == true) {
+			globalState.set('playing', false);
+		}
+	});
+
+	let updateTime = () => {
+		let playbackTime = globalState.get('playbackTime');
+		if (playbackTime != mediaElement.currentTime) {
+			globalState.set('playbackTime', mediaElement.currentTime);
+		}
+		window.requestAnimationFrame(updateTime);
+	}
+	window.requestAnimationFrame(updateTime);
+
+} catch(exception) {
+	alert("An unknown error occured.");
+	console.error(exception);
+}
+</script>
+<style>
+
+	button.play-pause svg {
+		display: none;
+	}
+	button.play-pause svg:first-child {
+		display: inline-block;
+	}
+	button.play-pause.playing svg {
+		display: inline-block;
+	}
+	button.play-pause.playing svg:first-child {
+		display: none;
+	}
+	progress.player {
+		width: 100%;
+		height: calc(var(--header-height) - 1em);
+		vertical-align: center;
+		flex-shrink: 1;
+	}
+	.custom-widgets progress[value] {
+	  /* Reset the default appearance */
+	  -webkit-appearance: none;
+		 -moz-appearance: none;
+			  appearance: none;
+	  
+	  /* Get rid of default border in Firefox. */
+	  border: none;
+	  border: 1px solid var(--chrome-border);
+	  border-radius: var(--border-radius);
+	  overflow: hidden;
+	}
+	.custom-widgets  progress[value]::-webkit-progress-bar, progress[value] {
+		background: var(--input-background);
+		box-shadow: inset -1px 2px calc(var(--box-shadow-spread) * 1.25) 2px rgba(255,255,255, calc(var(--highlight-strength) * 1));
+	}
+
+	/* These don't work together for some reason*/
+	.custom-widgets progress[value]::-webkit-progress-value {
+		background: var(--progress-bar-background);
+		border-radius: var(--border-radius) 0px 0px var(--border-radius);
+
+	}
+	.custom-widgets progress[value]::-moz-progress-bar { 
+		background: var(--progress-bar-background);
+		border-radius: var(--border-radius) 0px 0px var(--border-radius);
+	}
+	video.clip {
+		position: absolute;
+		top: 0px;
+		left: 0px;
+		right:0px;
+		bottom: 0px;
+		z-index: 1;
+		width: 100%;
+		height: var(--header-height);
+		margin: 0px;
+		opacity: 0;
+	}
+</style>
+<!-- ====================================================== -->
+

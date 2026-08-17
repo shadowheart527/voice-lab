@@ -1,0 +1,6 @@
+*.swp
+__pycache__
+corpus-processed
+settings.json
+countries.mmdb
+.directory

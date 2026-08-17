@@ -1,0 +1,100 @@
+<!doctype html>
+{% include 'notice.html' %}
+<html>
+	<head>
+		<meta charset='utf-8'/>
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<meta name="theme-color" content="#45acf4">
+		<title>Acoustic Genderspace Viewer - Research Trial</title>
+		<link rel="shortcut icon" href="./resources/logo.png">
+		<link rel="icon" sizes="192x192" href="./resources/logo.png">
+		<link href="data:text/css," rel="stylesheet" type="text/css" title="Null">
+		<link rel="manifest" href="./manifest.json">
+		<style>
+			{% filter indent(width=12) %}
+				{% include 'variables.css' %}
+				{% include 'layout.css' %}
+				{% include 'style.css' %}
+				{% include 'voice-graph.css' %}
+				{% include 'spinner.css' %}
+			{% endfilter %}
+		</style>
+
+		<script>
+			{% include 'svg-icons.js' %}
+		</script>
+		{% if dev %}
+			<script src="./ui/dom.js"></script>
+			<script src="./ui/globals.js"></script>
+			<script src="./ui/clip.js"></script>
+			<script src="./ui/examples.js"></script>
+			<script src="./ui/util.js"></script>
+		{% else %}
+		<script>
+			{% filter indent(width=8) %}
+				{% include "dom.js" %}
+				{% include "globals.js" %}
+				{% include "clip.js" %}
+				{% include "examples.js" %}
+				{% include "util.js" %}
+			{% endfilter %}
+		</script>
+		{% endif %}
+	</head>
+	<body class="narrow-body custom-widgets">
+		{% include 'popup.html' %}
+		<header>
+			{% filter indent(width=12) %}
+				{% include 'player.html' %}
+			{% endfilter %}
+			<button class="new-clip attention" title='Add new clip'>{% include 'plus-lg.svg' %}<span>Clip</span></button>
+			<div class="spinner hidden"></div>
+			<div class="loading-message">Adding clip...</div>
+			<script>
+			$('button.new-clip').addEventListener('click', evt => {
+				$('.modal').appendChild($('section.new-clip'));
+				showModal();
+			});
+			</script>
+		</header>
+		<main>
+			<section>
+				<voice-graph-2d></voice-graph-2d>
+			</section>
+			<aside>
+				{% filter indent(width=16) %}
+					{% include 'sidepane.html' %}
+				{% endfilter %}
+			</aside>
+		</main>
+
+		{% filter indent(width=8) %}
+			{% include 'modal.html' %}
+		{% endfilter %}
+
+		<!-- This is where we keep stuff we don't want visible -->
+		<div id="offscreen">
+			{% filter indent(width=12) %}
+				{% include 'settings.html' %}
+				{% include 'help.html'     %}
+				{% include 'details.html'  %}
+				{% include 'new-clip.html' %}
+			{% endfilter %}
+		</div>
+
+		{% include "svg-icons.js" %}
+		{% if dev %}
+			<script src="./ui/index.js"></script>
+			<script src="./ui/voice-graph.js"></script>
+		{% else %}
+		<script>
+			{% filter indent(width=12) %}
+				{% include "index.js" %}
+				{% include "voice-graph.js" %}
+			{% endfilter %}
+		</script>
+		{% endif %}
+		<script src="./live-overlay.js"></script>
+	</body>
+</html>
+

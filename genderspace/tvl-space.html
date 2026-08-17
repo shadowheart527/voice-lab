@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fullness Space — weight × size (TVL)</title>
+<style>
+:root {
+  --bg: #fafafa; --ink: #1c1c22; --muted: #6d6d78; --panel: #ffffff;
+  --line: #444; --fem: #c94f8c; --masc: #4468c9; --chart-bg: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #17171c; --ink: #e8e8ee; --muted: #9a9aa8; --panel: #202027;
+          --chart-bg: #fdfdfb; }
+}
+html, body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.5 Georgia, "Palatino Linotype", serif; }
+main { max-width: 860px; margin: 0 auto; padding: 1rem 1rem 3rem; }
+h1 { font-size: 1.35rem; font-weight: 600; margin: 0.6rem 0 0.1rem; }
+.sub { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.8rem;
+  font-family: system-ui, sans-serif; }
+.wrap { position: relative; background: var(--chart-bg); border-radius: 10px;
+  box-shadow: 0 1px 8px rgba(0,0,0,0.18); }
+canvas { display: block; width: 100%; height: auto; border-radius: 10px; }
+.hud { display: flex; gap: 1.2rem; align-items: baseline; flex-wrap: wrap;
+  font-family: system-ui, sans-serif; margin-top: 0.7rem; }
+.cell { font-size: 1.5rem; font-weight: 700; font-family: Georgia, serif; }
+.desc { font-size: 1rem; color: var(--ink); }
+.nums { font-size: 0.85rem; color: var(--muted);
+  font-variant-numeric: tabular-nums; }
+.chip { font-size: 0.8rem; padding: 0.1em 0.7em; border-radius: 1em;
+  background: rgba(128,128,128,0.18); color: var(--muted); }
+.chip.live { color: #2e9e5b; }
+label.toggle { font-family: system-ui, sans-serif; font-size: 0.85rem;
+  color: var(--muted); user-select: none; cursor: pointer; margin-left: auto; }
+.note { font-family: system-ui, sans-serif; font-size: 0.8rem;
+  color: var(--muted); margin-top: 0.9rem; max-width: 64ch; }
+a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Fullness Space</h1>
+  <div class="sub">vocal weight &#215; vocal size, after TransVoiceLessons
+    ("Is Your Voice Too Buzzy or Too Hollow?"). Pitch is deliberately not part
+    of this graph.</div>
+
+  <div class="wrap">
+    <canvas id="chart" width="1400" height="1400"></canvas>
+  </div>
+
+  <div class="hud">
+    <span class="cell" id="cellCode">--</span>
+    <span class="desc" id="cellDesc">waiting for voice</span>
+    <span class="nums" id="nums"></span>
+    <span class="chip" id="conn">&#9675; InFormant not running</span>
+    <label class="toggle"><input type="checkbox" id="ufofam"> UFO-FAM bands</label>
+  </div>
+
+  <div class="note">
+    Weight is the spectral roll-off of your harmonics (flat = heavy/buzzy,
+    steep = light), noise-gated and anchored against the video's own light and
+    heavy demonstrations. Size is your R1/R2 position between the masc and fem
+    formant anchors, small at the top. Full = weight matched to size; hollow =
+    lighter than your size; buzzy = heavier than your size. Absolute placement
+    shifts a little with mic and room; trust contrasts within your own voice
+    most. To pin the weight scale to your own mic: make your lightest and your
+    heaviest sound, note the two dB/oct readings above, and reload with
+    <span style="font-family: monospace">?wlight=&lt;lightest&gt;&amp;wheavy=&lt;heaviest&gt;</span>
+    in the address.
+    <a href="./index.html">Back to the pitch &#215; resonance space</a>.
+  </div>
+</main>
+<script src="./tvl-overlay.js"></script>
+</body>
+</html>
