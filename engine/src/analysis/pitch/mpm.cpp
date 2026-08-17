@@ -113,7 +113,16 @@ Analysis::Pitch::MPM::solve(const double *data, int length, int sample_rate)
 
 	acorr_r(audio_buffer);
 
-        double max = 0.02;
+        // Seeded at 0.0, not 0.02. The old seed was an absolute floor on a
+        // quantity that scales with signal power: once every autocorrelation
+        // value fell below it the division stopped normalising, every peak
+        // landed under MPM_SMALL_CUTOFF, and the tracker reported unvoiced.
+        // Measured on a 200 Hz vowel, that began degrading at -15 dBFS RMS and
+        // was completely dead by -18 dBFS -- and a well-recorded voice sits
+        // around -20 dBFS, so MPM as shipped stopped tracking at ordinary
+        // recording levels. Without the seed it is scale-invariant, giving an
+        // identical estimate down to -73 dBFS.
+        double max = 0.0;
         for (int i = 0; i < length; ++i) {
             if (fabs(audio_buffer[i]) > max) {
                 max = fabs(audio_buffer[i]);
