@@ -1,0 +1,122 @@
+[
+ {
+  "name": "aiden",
+  "pitch": 121.3,
+  "resonance": 0.5091,
+  "color": "#5e5e5e"
+ },
+ {
+  "name": "ashley",
+  "pitch": 186.0,
+  "resonance": 0.3703,
+  "color": "#5e5e5e"
+ },
+ {
+  "name": "bob",
+  "pitch": 129.5,
+  "resonance": 0.3856,
+  "color": "#5e5e5e"
+ },
+ {
+  "name": "charlotte",
+  "pitch": 153.9,
+  "resonance": 0.5664,
+  "color": "#5e5e5e"
+ },
+ {
+  "name": "cheryl",
+  "pitch": 238.4,
+  "resonance": 0.5706,
+  "color": "#5e5e5e"
+ },
+ {
+  "name": "chris",
+  "pitch": 139.7,
+  "resonance": 0.4044,
+  "color": "#5e5e5e"
+ },
+ {
+  "name": "chuck",
+  "pitch": 113.5,
+  "resonance": 0.2854,
+  "color": "#5e5e5e"
+ },
+ {
+  "name": "david",
+  "pitch": 90.5,
+  "resonance": 0.3926,
+  "color": "#5e5e5e"
+ },
+ {
+  "name": "fern",
+  "pitch": 152.3,
+  "resonance": 0.4789,
+  "color": "#5e5e5e"
+ },
+ {
+  "name": "jenn",
+  "pitch": 168.9,
+  "resonance": 0.5883,
+  "color": "#5e5e5e"
+ },
+ {
+  "name": "kristen",
+  "pitch": 197.7,
+  "resonance": 0.5479,
+  "color": "#5e5e5e"
+ },
+ {
+  "name": "leonard",
+  "pitch": 121.7,
+  "resonance": 0.4915,
+  "color": "#5e5e5e"
+ },
+ {
+  "name": "lesley",
+  "pitch": 218.6,
+  "resonance": 0.4487,
+  "color": "#5e5e5e"
+ },
+ {
+  "name": "lucy",
+  "pitch": 242.8,
+  "resonance": 0.6853,
+  "color": "#5e5e5e"
+ },
+ {
+  "name": "luna",
+  "pitch": 199.1,
+  "resonance": 0.5168,
+  "color": "#5e5e5e"
+ },
+ {
+  "name": "morgan",
+  "pitch": 217.6,
+  "resonance": 0.5447,
+  "color": "#5e5e5e"
+ },
+ {
+  "name": "quinn",
+  "pitch": 287.4,
+  "resonance": 0.3277,
+  "color": "#5e5e5e"
+ },
+ {
+  "name": "steve",
+  "pitch": 178.1,
+  "resonance": 0.2312,
+  "color": "#5e5e5e"
+ },
+ {
+  "name": "wina",
+  "pitch": 211.5,
+  "resonance": 0.5139,
+  "color": "#5e5e5e"
+ },
+ {
+  "name": "zoe",
+  "pitch": 208.3,
+  "resonance": 0.6416,
+  "color": "#5e5e5e"
+ }
+]

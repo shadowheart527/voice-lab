@@ -17,6 +17,7 @@
 #include "../context/genderscore.h"
 
 #include <cmath>
+#include <algorithm>
 #include <memory>
 #include <vector>
 
@@ -151,6 +152,62 @@ void vl_analyze(const float *samples, int count)
             if (fr.formants.size() > 3) gF4 = fr.formants[3].frequency;
         }
     }
+}
+
+/// Spectrogram slice for the scrolling view: magnitudes in dB for the current
+/// window, on the same chain the desktop's spectrogram processor uses (resample
+/// to twice the view ceiling, highpass at 60 Hz, windowed FFT). Writes `bins`
+/// magnitudes into `out` and returns how many were written.
+EMSCRIPTEN_KEEPALIVE
+int vl_spectrogram(const float *samples, int count, double maxFrequency,
+                   int fftSize, float *out, int bins)
+{
+    const double fsView = 2.0 * maxFrequency;
+
+    static rpm::vector<double> sInput;
+    static rpm::vector<double> sSlide;
+    static std::unique_ptr<Analysis::RealFFT> sFFT;
+    static rpm::vector<double> sWindow;
+
+    sInput.resize(count);
+    for (int i = 0; i < count; ++i) {
+        sInput[i] = samples[i];
+    }
+
+    // Decimate to the view rate.
+    const double ratio = fsView / g.sampleRate;
+    const int n = std::max(1, (int) (count * ratio));
+    rpm::vector<double> view(n);
+    for (int i = 0; i < n; ++i) {
+        const double pos = i / ratio;
+        const int i0 = (int) pos;
+        const int i1 = std::min(i0 + 1, count - 1);
+        const double frac = pos - i0;
+        view[i] = sInput[i0] * (1.0 - frac) + sInput[i1] * frac;
+    }
+
+    if ((int) sSlide.size() != fftSize) {
+        sSlide.assign(fftSize, 0.0);
+    }
+    const int shift = std::min(n, fftSize);
+    std::rotate(sSlide.begin(), std::next(sSlide.begin(), shift), sSlide.end());
+    std::copy(view.end() - shift, view.end(), std::prev(sSlide.end(), shift));
+
+    if (!sFFT || sFFT->getInputLength() != fftSize) {
+        sFFT = std::make_unique<Analysis::RealFFT>(fftSize);
+        sWindow = gaussianWindow(fftSize, 2.5);
+    }
+    for (int i = 0; i < fftSize; ++i) {
+        sFFT->input(i) = sSlide[i] * sWindow[i];
+    }
+    sFFT->computeForward();
+
+    const int nOut = std::min(bins, sFFT->getOutputLength());
+    for (int i = 0; i < nOut; ++i) {
+        const double m = std::abs(sFFT->output(i));
+        out[i] = (float) (20.0 * std::log10(std::max(m, 1e-10)));
+    }
+    return nOut;
 }
 
 EMSCRIPTEN_KEEPALIVE int    vl_voiced()  { return gVoiced; }

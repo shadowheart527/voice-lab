@@ -18,6 +18,7 @@ let api = null;
 let sampleRate = 48000;
 let winSamples = 0;
 let framePtr = 0;
+let specPtr = 0;
 let window_ = null;
 
 const history = [];
@@ -29,6 +30,9 @@ const WIN_S = 0.04;
 // Desktop config enum values: RAPT pitch, Burg linear prediction, FilteredLP
 // formants. These are the desktop application's defaults.
 const ALG_PITCH = 2, ALG_LINPRED = 2, ALG_FORMANT = 1;
+
+// Spectrogram view parameters, matching the desktop defaults.
+const SPEC_MAX_HZ = 5000, SPEC_FFT = 2048, SPEC_BINS = SPEC_FFT / 2 + 1;
 
 function medianIn(key, span) {
     const cutoff = t - span;
@@ -76,8 +80,11 @@ async function init(rate) {
         overall: mod.cwrap('vl_overall_score', 'number', ['number', 'number']),
         siteRes: mod.cwrap('vl_site_resonance', 'number', ['number', 'number', 'number']),
         weight: mod.cwrap('vl_weight', 'number', ['number']),
+        spectrogram: mod.cwrap('vl_spectrogram', 'number',
+                ['number', 'number', 'number', 'number', 'number', 'number']),
     };
     framePtr = mod._malloc(winSamples * 4);
+    specPtr = mod._malloc(SPEC_BINS * 4);
     api.init(sampleRate, ALG_PITCH, ALG_LINPRED, ALG_FORMANT);
     self.postMessage({ type: 'ready', engine: 'wasm' });
 }
@@ -111,6 +118,11 @@ self.onmessage = async (e) => {
 
     mod.HEAPF32.set(window_, framePtr >> 2);
     api.analyze(framePtr, winSamples);
+
+    const nBins = api.spectrogram(framePtr, winSamples, SPEC_MAX_HZ, SPEC_FFT, specPtr, SPEC_BINS);
+    const spectrum = nBins > 0
+        ? Float32Array.from(mod.HEAPF32.subarray(specPtr >> 2, (specPtr >> 2) + nBins))
+        : null;
 
     const voiced = api.voiced() !== 0;
     const rawTilt = api.tilt();
@@ -157,5 +169,11 @@ self.onmessage = async (e) => {
         out.weight = api.weight(dTilt);
     }
 
-    self.postMessage(out);
+    if (spectrum) {
+        out.spectrum = spectrum;
+        out.specMaxHz = SPEC_MAX_HZ;
+        self.postMessage(out, [spectrum.buffer]);
+    } else {
+        self.postMessage(out);
+    }
 };

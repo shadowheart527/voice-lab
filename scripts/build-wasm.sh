@@ -7,9 +7,12 @@
 # and gci/sigma (armadillo) are excluded; neither has a browser equivalent and
 # neither is on this analysis path.
 set -e
-cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/engine"
+# Resolve the repository root ONCE, before any cd: deriving it a second time
+# afterwards would resolve against the new working directory.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT/engine"
 OUT=../browser/wasm
-SCRATCH="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.wasm-build"
+SCRATCH="$ROOT/.wasm-build"
 OBJ="$SCRATCH/wasm-obj"
 mkdir -p "$OUT" "$OBJ"
 
@@ -63,7 +66,7 @@ em++ $OBJS external/fftw-wasm/lib/libfftw3.a \
     -s EXPORT_NAME=createVoiceLab \
     -s ALLOW_MEMORY_GROWTH=1 \
     -s ENVIRONMENT=web,worker,node \
-    -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap","HEAPF32"]' -s EXPORTED_FUNCTIONS='["_malloc","_free","_vl_init","_vl_analyze","_vl_voiced","_vl_pitch","_vl_f1","_vl_f2","_vl_f3","_vl_f4","_vl_tilt","_vl_pitch_score","_vl_resonance_score","_vl_resonance_r","_vl_overall_score","_vl_site_resonance","_vl_weight"]' \
+    -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap","HEAPF32"]' -s EXPORTED_FUNCTIONS='["_malloc","_free","_vl_init","_vl_analyze","_vl_voiced","_vl_pitch","_vl_f1","_vl_f2","_vl_f3","_vl_f4","_vl_tilt","_vl_pitch_score","_vl_resonance_score","_vl_resonance_r","_vl_overall_score","_vl_site_resonance","_vl_weight","_vl_spectrogram"]' \
     -o "$OUT/voicelab.mjs"
 
 echo "built $OUT/voicelab.wasm: $(stat -c%s "$OUT/voicelab.wasm") bytes"

@@ -3,6 +3,7 @@
 
 import { genderColor, noteName, fullnessCell } from './dsp/gender.js';
 import { SessionRecorder } from './session.js';
+import { InformantView } from './views/informant.js';
 import * as probe from './ml/gender-probe.js';
 
 const TRAIL_SECONDS = 6;
@@ -12,11 +13,17 @@ const el = (id) => document.getElementById(id);
 const cv = el('chart');
 const ctx = cv.getContext('2d');
 
-let view = 'gender';
+let view = 'informant';
 let running = false;
 let worker = null, audioCtx = null, stream = null, node = null;
 let listener = null;   // optional neural perceived-gender probe
 const session = new SessionRecorder(TARGET_MIN, TARGET_MAX);
+const informant = new InformantView({ targetMin: TARGET_MIN, targetMax: TARGET_MAX });
+let refSpeakers = [];
+fetch(new URL('../data/reference-speakers.json', import.meta.url))
+    .then((r) => r.json()).then((d) => { refSpeakers = d; draw(); })
+    .catch(() => {});
+const isDark = () => matchMedia('(prefers-color-scheme: dark)').matches;
 const trail = [];
 let last = null;
 let voicedFrames = 0, inBandFrames = 0;
@@ -27,7 +34,9 @@ function fitCanvas() {
     const w = cv.parentElement.clientWidth;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     // Square on phones, a little wider on desktop.
-    const h = Math.min(w, Math.max(320, window.innerHeight * 0.45));
+    const h = view === 'informant'
+        ? Math.max(260, Math.min(w * 0.62, window.innerHeight * 0.52))
+        : Math.min(w, Math.max(320, window.innerHeight * 0.45));
     cv.style.height = h + 'px';
     cv.width = Math.round(w * dpr);
     cv.height = Math.round(h * dpr);
@@ -64,6 +73,19 @@ function drawGenderspace(W, H, M) {
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(M, y1); ctx.lineTo(M + iw, y1);
     ctx.moveTo(M, y2); ctx.lineTo(M + iw, y2); ctx.stroke();
+
+    // The site's reference speakers, so the live dot has something to sit among.
+    for (const sp of refSpeakers) {
+        const x = M + sp.resonance * iw;
+        const y = M + (1 - pitchPct(sp.pitch)) * ih;
+        ctx.beginPath();
+        ctx.arc(x, y, Math.max(5, W / 120), 0, 7);
+        ctx.fillStyle = sp.color || 'rgba(60,60,70,0.8)';
+        ctx.fill();
+        ctx.lineWidth = Math.max(1.5, W / 400);
+        ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+        ctx.stroke();
+    }
 
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.font = `600 ${Math.round(W / 46)}px system-ui`;
@@ -114,6 +136,10 @@ function draw() {
     const W = cv.width, H = cv.height;
     const M = Math.round(W * 0.09);
     ctx.clearRect(0, 0, W, H);
+    if (view === 'informant') {
+        informant.draw(ctx, W, H, last ? last.t : 0, isDark());
+        return;
+    }
     if (view === 'gender') drawGenderspace(W, H, M); else drawFullness(W, H, M);
 
     const iw = W - 2 * M, ih = H - 2 * M;
@@ -162,7 +188,7 @@ function draw() {
 // ----------------------------------------------------------------- readouts
 
 function updateReadout(m) {
-    if (view === 'gender') {
+    if (view !== 'fullness') {
         el('vPitch').textContent = m.pitch > 0 ? Math.round(m.pitch) : '—';
         el('vNote').textContent = m.pitch > 0 ? noteName(m.pitch) : '';
         el('vRes').textContent = m.resonance >= 0 ? Math.round(m.resonance * 100) + '%' : '—';
@@ -236,6 +262,7 @@ async function start() {
             ? Math.max(0, Math.min(1, m.sizeR)) : null;
         m.size = size;   // readouts read it off the measurement
         session.add(m);
+        informant.push(m.spectrum || null, m, m.t);
         const point = {
             wall: performance.now(),
             pitch: m.pitch, res: m.resonance, score: m.score,
@@ -269,6 +296,7 @@ async function start() {
     src.connect(node);
 
     session.reset();
+    informant.reset();
     voicedFrames = inBandFrames = 0;
     running = true;
     el('mic').textContent = 'Stop';
@@ -297,17 +325,19 @@ function loop() {
 
 el('mic').addEventListener('click', () => (running ? stop() : start()));
 el('save').addEventListener('click', () => session.download());
+el('tabInformant').addEventListener('click', () => setView('informant'));
 el('tabGender').addEventListener('click', () => setView('gender'));
 el('tabFullness').addEventListener('click', () => setView('fullness'));
 
 function setView(v) {
     view = v;
-    el('tabGender').setAttribute('aria-pressed', String(v === 'gender'));
-    el('tabFullness').setAttribute('aria-pressed', String(v === 'fullness'));
-    el('genderReadout').classList.toggle('hidden', v !== 'gender');
-    el('fullnessReadout').classList.toggle('hidden', v === 'gender');
+    for (const [id, name] of [['tabInformant', 'informant'], ['tabGender', 'gender'], ['tabFullness', 'fullness']]) {
+        el(id).setAttribute('aria-pressed', String(v === name));
+    }
+    el('genderReadout').classList.toggle('hidden', v === 'fullness');
+    el('fullnessReadout').classList.toggle('hidden', v !== 'fullness');
     if (last) updateReadout(last);
-    draw();
+    fitCanvas();
 }
 
 if (!window.isSecureContext) el('httpWarn').classList.remove('hidden');
