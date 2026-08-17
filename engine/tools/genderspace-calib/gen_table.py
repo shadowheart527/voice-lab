@@ -10,7 +10,7 @@ import json, os
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.expanduser("~/git/gender-voice-visualization")
+REPO = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "..", "genderspace")
 STATS = json.load(open(f"{REPO}/stats.json"))
 
 def load(path):
@@ -47,7 +47,7 @@ for tag, path in [("Lpc", f"{HERE}/dataset-dn.tsv"), ("Df", f"{HERE}/dataset-df.
 
 phones = sorted(k for k in STATS if STATS[k] and len(STATS[k]) >= 3)
 
-out = f"{os.path.expanduser('~/git/informant')}/src/context/genderspace_table.h"
+out = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "src", "context", "genderspace_table.h")
 with open(out, "w") as f:
     f.write(
 """#ifndef MAIN_CONTEXT_GENDERSPACE_TABLE_H

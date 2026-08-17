@@ -11,7 +11,7 @@ the phoneme-normalized resonance score). Writes:
 """
 import base64, json, os, sys
 
-REPO = os.path.expanduser("~/git/gender-voice-visualization")
+REPO = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "..", "genderspace")
 OUTDIR = sys.argv[1] if len(sys.argv) > 1 else "."
 SKIP = {"themes"}
 

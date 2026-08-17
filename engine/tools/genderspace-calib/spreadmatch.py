@@ -16,7 +16,7 @@ import json, math, os, sys
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.expanduser("~/git/gender-voice-visualization")
+REPO = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "..", "genderspace")
 STATS = json.load(open(f"{REPO}/stats.json"))
 W_SITE = [0.7321428571428571, 0.26785714285714285, 0.0]
 PHONES_ALL = [k for k in STATS if STATS[k] and len(STATS[k]) >= 3]

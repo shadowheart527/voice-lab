@@ -1,0 +1,19 @@
+# Build output
+engine/build*/
+browser/dist/
+browser/node_modules/
+
+# Large third-party payloads, fetched by scripts/bootstrap.sh
+engine/external/libtorch/
+ml/models/
+
+# Python
+__pycache__/
+*.pyc
+.venv*/
+
+# Runtime
+*.log
+*.wav
+!docs/**/*.wav
+.DS_Store

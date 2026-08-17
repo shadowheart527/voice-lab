@@ -7,7 +7,7 @@
 set -e
 
 CONTAINER=informant-build
-SRC=/var/home/shadowheart527/git/informant
+SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN="$SRC/build-fedora-df/in-formant"
 
 if [ ! -x "$BIN" ]; then

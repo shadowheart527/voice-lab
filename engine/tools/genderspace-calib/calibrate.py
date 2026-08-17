@@ -22,7 +22,7 @@ import json, math, os, sys
 import numpy as np
 
 CLIPDIR = sys.argv[1]
-REPO = os.path.expanduser("~/git/gender-voice-visualization")
+REPO = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "..", "genderspace")
 STATS = json.load(open(f"{REPO}/stats.json"))
 W_SITE = [0.7321428571428571, 0.26785714285714285, 0.0]
 

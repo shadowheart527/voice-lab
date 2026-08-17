@@ -5,7 +5,7 @@
 set -e
 
 CONTAINER=informant-build
-SRC=/var/home/shadowheart527/git/informant
+SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if [ "$1" = "df" ]; then
     BUILDDIR=build-fedora-df
