@@ -88,7 +88,7 @@ if (existsSync(vendor)) {
 } else {
     notes.push('vendor/: onnxruntime-web not deployed, so the neural probe stays hidden');
 }
-if (!existsSync(join(root, 'LICENSE'))) errors.push('LICENSE: missing from the built site');
+if (!existsSync(join(root, 'LICENSE.txt'))) errors.push('LICENSE.txt: missing from the built site');
 
 const total = walk(root).length;
 const bytes = walk(root).reduce((n, f) => n + statSync(f).size, 0);

@@ -7,10 +7,10 @@
 # It gathers three things the working tree keeps out of git, plus one the AGPL
 # requires of a network deployment:
 #
-#   vendor/   onnxruntime-web, from browser/node_modules (npm ci) or browser/vendor
-#   models/   the optional gender-probe ONNX, if a copy is around
-#   LICENSE   AGPL-3.0, the terms browser/ is under
-#   source/   the corresponding source, offered from the page footer
+#   vendor/      onnxruntime-web, from browser/node_modules (npm ci) or browser/vendor
+#   models/      the optional gender-probe ONNX, if a copy is around
+#   LICENSE.txt  AGPL-3.0, the terms browser/ is under
+#   source/      the corresponding source, offered from the page footer
 #
 # The model is genuinely optional; the app hides the listener reading when it is
 # absent and the DSP path does not touch it.
@@ -66,7 +66,9 @@ else
 fi
 
 printf '\n=== licence and source offer\n'
-cp "$ROOT/genderspace/LICENSE" "$OUT/LICENSE"
+# .txt, so a static host serves it as text/plain and the footer link shows the
+# licence in the browser instead of downloading an extensionless file.
+cp "$ROOT/genderspace/LICENSE" "$OUT/LICENSE.txt"
 
 # The corresponding source for what is being served: the app (already shipped
 # unminified), the calibration harness that derives its constants, the generator
@@ -111,11 +113,11 @@ EOF
 
 mkdir -p "$OUT/source"
 tar -czf "$OUT/source/$SRCNAME.tar.gz" -C "$STAGE" "$SRCNAME"
-say "LICENSE, source/$SRCNAME.tar.gz ($(du -h "$OUT/source/$SRCNAME.tar.gz" | cut -f1))"
+say "LICENSE.txt, source/$SRCNAME.tar.gz ($(du -h "$OUT/source/$SRCNAME.tar.gz" | cut -f1))"
 
 # The footer carries the offer only in a built site; served straight out of
 # browser/ for local use there is nothing to offer and no one to offer it to.
-OFFER='<a href="./source/'"$SRCNAME"'.tar.gz">Source</a> (<a href="./LICENSE">AGPL&#8209;3.0</a>).'
+OFFER='<a href="./source/'"$SRCNAME"'.tar.gz">Source</a> (<a href="./LICENSE.txt">AGPL&#8209;3.0</a>).'
 MODEL_STATE=absent
 [ -n "$MODEL" ] && MODEL_STATE=present
 python3 - "$OUT/index.html" "$OFFER" "$MODEL_STATE" <<'PY'
