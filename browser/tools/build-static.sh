@@ -34,6 +34,11 @@ cp -r "$ROOT/browser/src" "$OUT/"
 # The shared analysis core, compiled from the desktop engine's own sources.
 # Without this the analysis worker has nothing to import and the page loads but
 # never measures anything.
+# Reference-speaker medians for the genderspace view.
+if [ -d "$ROOT/browser/data" ]; then
+    cp -r "$ROOT/browser/data" "$OUT/"
+fi
+
 if [ -f "$ROOT/browser/wasm/voicelab.wasm" ]; then
     cp -r "$ROOT/browser/wasm" "$OUT/"
 else
