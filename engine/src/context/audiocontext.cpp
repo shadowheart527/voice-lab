@@ -1,0 +1,237 @@
+#include "audiocontext.h"
+#include <array>
+#include <stdexcept>
+
+using namespace Main;
+
+static std::array supportedAudioBackends {
+// Disable Dummy backend regardless because of locking.
+/*#ifdef AUDIO_USE_DUMMY
+    Audio::Backend::Dummy,
+#endif*/
+#ifdef AUDIO_USE_ALSA
+    Audio::Backend::ALSA,
+#endif
+// Re-enabled: the latency issue was the default (very large) server fragment size,
+// which openCaptureStream now overrides with an explicit ~20 ms fragsize.
+#ifdef AUDIO_USE_PULSE
+    Audio::Backend::Pulse,
+#endif
+#ifdef AUDIO_USE_PORTAUDIO
+    Audio::Backend::PortAudio,
+#endif
+#ifdef AUDIO_USE_OBOE
+    Audio::Backend::Oboe,
+#endif
+#ifdef AUDIO_USE_WEBAUDIO
+    Audio::Backend::WebAudio,
+#endif
+};
+
+Audio::Backend Main::getDefaultAudioBackend()
+{
+#if defined(_WIN32) || defined(__APPLE__)
+    return Audio::Backend::PortAudio;
+#elif defined(ANDROID) || defined(__ANDROID__)
+    return Audio::Backend::Oboe;
+#elif defined(__linux)
+    // Prefer PulseAudio where it is available. On a PipeWire (or PulseAudio) desktop
+    // the PortAudio backend does not follow the server's default source -- it opens
+    // ALSA's "default" PCM and captures silence -- and it spams ALSA/JACK enumeration
+    // errors on the way. The Pulse backend resolves the real default source.
+    // ALSA is still avoided as a default: it causes really high CPU usage.
+#  ifdef AUDIO_USE_PULSE
+    return Audio::Backend::Pulse;
+#  else
+    return Audio::Backend::PortAudio;
+#  endif
+#elif defined(__EMSCRIPTEN__)
+    return Audio::Backend::WebAudio;
+#else
+#  error "No default backend for this platform."
+#endif
+}
+
+rpm::vector<Audio::Backend> Main::getSupportedAudioBackends()
+{
+    return rpm::vector<Audio::Backend>(
+            supportedAudioBackends.begin(),
+            supportedAudioBackends.end());
+}
+
+std::string Main::getAudioBackendName(Audio::Backend type)
+{
+    switch (type) {
+    case Audio::Backend::Dummy:
+        return "Dummy";
+    case Audio::Backend::ALSA:
+        return "ALSA";
+    case Audio::Backend::Pulse:
+        return "PulseAudio";
+    case Audio::Backend::PortAudio:
+        return "PortAudio";
+    case Audio::Backend::Oboe:
+        return "Oboe";
+    case Audio::Backend::WebAudio:
+        return "WebAudio";
+    default:
+        return "Unknown";
+    }
+}
+
+AudioContext::AudioContext(Audio::Backend type, Audio::Buffer *captureBuffer, Audio::Queue *playbackQueue)
+    : mCaptureStreamOpened(false),
+      mCaptureStreamStarted(false),
+      mPlaybackStreamOpened(false),
+      mPlaybackStreamStarted(false)
+{    
+    switch (type) {
+#ifdef AUDIO_USE_DUMMY
+    case Audio::Backend::Dummy:
+        mAudio = std::make_unique<Audio::Dummy>();
+        break;
+#endif
+#ifdef AUDIO_USE_ALSA
+    case Audio::Backend::ALSA:
+        mAudio = std::make_unique<Audio::Alsa>();
+        break;
+#endif
+#ifdef AUDIO_USE_PULSE
+    case Audio::Backend::Pulse:
+        mAudio = std::make_unique<Audio::Pulse>();
+        break;
+#endif
+#ifdef AUDIO_USE_PORTAUDIO
+    case Audio::Backend::PortAudio:
+        mAudio = std::make_unique<Audio::PortAudio>();
+        break;
+#endif
+#ifdef AUDIO_USE_OBOE
+    case Audio::Backend::Oboe:
+        mAudio = std::make_unique<Audio::Oboe>();
+        break;
+#endif
+#ifdef AUDIO_USE_WEBAUDIO
+    case Audio::Backend::WebAudio:
+        mAudio = std::make_unique<Audio::WebAudio>();
+        break;
+#endif
+    default:
+        throw std::runtime_error(std::string("AudioContext] Unknown backend: ") + std::to_string(static_cast<int>(type)));
+    }
+
+    if (!mAudio) {
+        throw std::runtime_error("AudioContext] Backend could not be initialized.");
+    }
+
+    mAudio->setCaptureBuffer(captureBuffer);
+    mAudio->setPlaybackQueue(playbackQueue);
+    mAudio->initialize();
+    mAudio->refreshDevices();
+}
+
+AudioContext::~AudioContext()
+{
+    stopCaptureStream();
+    closeCaptureStream();
+    stopPlaybackStream();
+    closePlaybackStream();
+    mAudio->terminate();
+}
+
+void AudioContext::refreshDevices()
+{
+    mAudio->refreshDevices();
+}
+
+const rpm::vector<Audio::Device>& AudioContext::getCaptureDevices() const
+{
+    return mAudio->getCaptureDevices();
+}
+
+const rpm::vector<Audio::Device>& AudioContext::getPlaybackDevices() const
+{
+    return mAudio->getPlaybackDevices();
+}
+ 
+const Audio::Device& AudioContext::getDefaultCaptureDevice() const
+{
+    return mAudio->getDefaultCaptureDevice();
+}
+
+const Audio::Device& AudioContext::getDefaultPlaybackDevice() const
+{
+    return mAudio->getDefaultPlaybackDevice();
+}
+
+void AudioContext::openCaptureStream(const Audio::Device *pDevice)
+{
+    if (!mCaptureStreamOpened) {
+        mAudio->openCaptureStream(pDevice);
+        mCaptureStreamOpened = true;
+    }
+}
+
+void AudioContext::startCaptureStream()
+{
+    if (!mCaptureStreamStarted) {
+        mAudio->startCaptureStream();
+        mCaptureStreamStarted = true;
+    }
+}
+
+void AudioContext::stopCaptureStream()
+{
+    if (mCaptureStreamStarted) {
+        mAudio->stopCaptureStream();
+        mCaptureStreamStarted = false;
+    }
+}
+
+void AudioContext::closeCaptureStream()
+{
+    if (mCaptureStreamOpened) {
+        mAudio->closeCaptureStream();
+        mCaptureStreamOpened = false;
+    }
+}
+
+void AudioContext::openPlaybackStream(const Audio::Device *pDevice)
+{
+    if (!mPlaybackStreamOpened) {
+        mAudio->openPlaybackStream(pDevice);
+        mPlaybackStreamOpened = true;
+    }
+}
+
+void AudioContext::startPlaybackStream()
+{
+    if (!mPlaybackStreamStarted) {
+        mAudio->startPlaybackStream();
+        mPlaybackStreamStarted = true;
+    }
+}
+
+void AudioContext::stopPlaybackStream()
+{
+    if (mPlaybackStreamStarted) {
+        mAudio->stopPlaybackStream();
+        mPlaybackStreamStarted = false;
+    }
+}
+
+void AudioContext::closePlaybackStream()
+{
+    if (mPlaybackStreamOpened) {
+        mAudio->closePlaybackStream();
+        mPlaybackStreamOpened = false;
+    }
+}
+
+void AudioContext::tickAudio()
+{
+    if (mAudio->needsTicking()) {
+        mAudio->tickAudio();
+    }
+}
+

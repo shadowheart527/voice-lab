@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+    <dict>
+        <key>CFBundleName</key>
+        <string>InFormant</string>
+        <key>CFBundleDisplayName</key>
+        <string>InFormant for macOS</string>
+        <key>CFBundleIdentifier</key>
+        <string>fr.cloyunhee.InFormant</string>
+        <key>CFBundleVersion</key>
+        <string>@VERSION@</string>
+        <key>CFBundleShortVersionString</key>
+        <string>@VERSION@</string>
+        <key>CFBundlePackageType</key>
+        <string>APPL</string>
+        <key>CFBundleSignature</key>
+        <string>ifrm</string>
+        <key>CFBundleIconFile</key>
+        <string>in-formant.icns</string>
+        <key>CFBundleExecutable</key>
+        <string>InFormant</string>
+        <key>NSMicrophoneUsageDescription</key>
+        <string>This app uses the microphone to record and analyse speech sounds.</string>
+    </dict>
+</plist>

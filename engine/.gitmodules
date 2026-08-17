@@ -1,0 +1,23 @@
+[submodule "oboe"]
+	path = external/oboe
+	url = https://github.com/google/oboe
+	branch = 1.4.3
+[submodule "r8brain-free-src"]
+	path = external/r8brain-free-src
+	url = https://github.com/avaneev/r8brain-free-src
+	branch = master
+[submodule "external/tomlplusplus"]
+	path = external/tomlplusplus
+	url = https://github.com/marzer/tomlplusplus
+[submodule "docker/windeployqt"]
+	path = docker/windeployqt
+	url = https://github.com/clo-yunhee/windeployqt
+[submodule "docker/macdeployqt"]
+	path = docker/macdeployqt
+	url = https://github.com/clo-yunhee/macdeployqt
+[submodule "external/rpmalloc"]
+	path = external/rpmalloc
+	url = https://github.com/mjansson/rpmalloc
+[submodule "docker/MSVCDocker"]
+	path = docker/MSVCDocker
+	url = https://github.com/paleozogt/MSVCDocker
