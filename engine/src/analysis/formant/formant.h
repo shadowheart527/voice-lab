@@ -2,7 +2,12 @@
 #define ANALYSIS_FORMANT_H
 
 #include "rpcxx.h"
-#include "../../modules/audio/resampler/resampler.h"
+// Only DeepFormants needs the resampler (and libsamplerate with it). The
+// WebAssembly build ships the LPC solvers without either, which keeps the
+// module small and drops a dependency that has no browser equivalent.
+#ifndef EMSCRIPTEN
+#  include "../../modules/audio/resampler/resampler.h"
+#endif
 
 #ifdef ENABLE_TORCH
 

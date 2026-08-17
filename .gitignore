@@ -21,3 +21,7 @@ __pycache__/
 # Fetched by scripts/bootstrap.sh, not distributed here
 browser/vendor/
 browser/models/
+engine/external/fftw-wasm/
+engine/external/eigen/
+browser/wasm/
+.wasm-build/

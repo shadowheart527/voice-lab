@@ -54,12 +54,24 @@ EMSCRIPTEN_KEEPALIVE
 void vl_init(double sampleRate, int pitchAlg, int linpredAlg, int formantAlg)
 {
     g.sampleRate = sampleRate;
-    g.pitch = std::shared_ptr<PitchSolver>(
-            Main::makePitchSolver(static_cast<Main::PitchAlgorithm>(pitchAlg)));
-    g.linpred = std::shared_ptr<LinpredSolver>(
-            Main::makeLinpredSolver(static_cast<Main::LinpredAlgorithm>(linpredAlg)));
-    g.formant = std::shared_ptr<FormantSolver>(
-            Main::makeFormantSolver(static_cast<Main::FormantAlgorithm>(formantAlg)));
+    // Instantiated directly rather than through Main::make*Solver, because
+    // those factories live in the Qt-bound context layer. The classes
+    // themselves are the same ones the desktop app uses. Indices match the
+    // desktop's config enums.
+    switch (pitchAlg) {
+        case 0:  g.pitch = std::make_shared<Pitch::Yin>(0.15);   // same threshold as the desktop factory break;
+        case 1:  g.pitch = std::make_shared<Pitch::MPM>(); break;
+        default: g.pitch = std::make_shared<Pitch::RAPT>(); break;
+    }
+    switch (linpredAlg) {
+        case 0:  g.linpred = std::make_shared<LP::Autocorr>(); break;
+        case 1:  g.linpred = std::make_shared<LP::Covar>(); break;
+        default: g.linpred = std::make_shared<LP::Burg>(); break;
+    }
+    switch (formantAlg) {
+        case 0:  g.formant = std::make_shared<Formant::SimpleLP>(); break;
+        default: g.formant = std::make_shared<Formant::FilteredLP>(); break;
+    }
     g.lastSample = 0.0;
 }
 
