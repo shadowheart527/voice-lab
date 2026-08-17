@@ -15,3 +15,17 @@ onnxruntime>=1.17
 soundfile>=0.12
 huggingface_hub>=0.23
 safetensors>=0.4
+
+# --- denoise/ and pitch/ : SEPARATE venv, ml/.venv-audio, Python 3.11 --------
+# NOT installable into ml/.venv above. DeepFilterNet's Rust extension
+# (deepfilterlib) publishes wheels only for cp38-cp311, and building from source
+# needs a cargo toolchain that Bazzite does not have. So these evaluations get
+# their own 3.11 venv:
+#
+#   uv venv --python 3.11 ml/.venv-audio
+#   VIRTUAL_ENV=ml/.venv-audio uv pip install --torch-backend=cpu torch torchaudio
+#   VIRTUAL_ENV=ml/.venv-audio uv pip install -r ml/requirements-audio.txt
+#
+# See ml/denoise/README.md and ml/pitch/README.md for findings. Note that
+# DeepFilterNet 0.5.6 also needs ml/denoise/df_compat.py to import at all under
+# torchaudio >= 2.2.

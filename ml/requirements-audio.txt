@@ -1,0 +1,23 @@
+# Dependencies for ml/denoise/ and ml/pitch/, installed into ml/.venv-audio
+# (Python 3.11 -- see the note in requirements.txt for why it cannot share
+# ml/.venv). Install torch/torchaudio from the CPU index FIRST:
+#
+#   uv venv --python 3.11 ml/.venv-audio
+#   VIRTUAL_ENV=ml/.venv-audio uv pip install --torch-backend=cpu torch torchaudio
+#   VIRTUAL_ENV=ml/.venv-audio uv pip install -r ml/requirements-audio.txt
+
+# --- denoise/ ---------------------------------------------------------------
+# deepfilternet pulls deepfilterlib (Rust ext, cp38-cp311 wheels only).
+deepfilternet==0.5.6
+
+# --- pitch/ -----------------------------------------------------------------
+# Only the mir-1k_g7 checkpoint loads under 2.0.x; the bundled legacy mir-1k
+# checkpoint raises a state_dict mismatch.
+pesto-pitch>=2.0.1
+
+# --- shared measurement / baselines -----------------------------------------
+numpy>=1.24,<2        # deepfilternet 0.5.6 pins numpy 1.x
+scipy>=1.11
+soundfile>=0.12
+librosa>=0.10         # YIN / pYIN reference baselines
+pysptk>=1.0           # installed for a RAPT baseline; RAPT not yet benchmarked

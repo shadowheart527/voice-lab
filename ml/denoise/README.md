@@ -55,10 +55,12 @@ Installed: `deepfilternet` 0.5.6, `deepfilterlib` 0.5.6, `torch` 2.13.0+cpu,
 48 kHz only, FFT 960 / hop 480 (20 ms window, 10 ms hop).
 
 Offline enhancement works (`run_df.py IN.wav OUT.wav [atten_lim_db]`).
-Throughput on this box, batch, CPU, unloaded: **RTF 0.015-0.022, i.e. 45-65x
-realtime**. Under load it degraded to 1-7x, so treat the headroom as real but
-not unlimited. Upstream quotes a minimum algorithmic latency of 20 ms for the
-LADSPA plugin (STFT), plus host buffering.
+Throughput on this box (i9-13900K), batch, CPU, best of 3 on 30 s of audio:
+**RTF 0.032 single-threaded (31.5× realtime), RTF 0.017 on 8 threads (57.8×)**.
+Measured while the machine was busy with other work (load average ~11); on a
+loaded box it fell as low as 1-7× realtime, so the headroom is real but not
+unlimited. Upstream quotes a minimum algorithmic latency of 20 ms for the LADSPA
+plugin (STFT), plus host buffering.
 
 ---
 
@@ -292,7 +294,7 @@ toolkit that the signal had been altered. Do not do that on this machine.
 
 **For cleaning up recordings a human listens back to: yes, use it.** On real
 connected speech it is near transparent (−0.43 dB RMS, −0.36 dB/oct tilt) and it
-removes ~42 dB of noise floor. It is fast (45-65× realtime on CPU), MIT/Apache
+removes ~42 dB of noise floor. It is fast (30-60× realtime on CPU), MIT/Apache
 dual-licensed, and offline use costs nothing but a venv.
 
 **As an input to the analysis path at default settings: no.** Two independent
