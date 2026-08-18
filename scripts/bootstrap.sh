@@ -64,6 +64,13 @@ else
     echo "npm not found; the browser build works without the neural probe"
 fi
 
+say "engine copy for the genderspace pages"
+if [ -f "$ROOT/browser/wasm/voicelab.wasm" ]; then
+    bash "$ROOT/scripts/sync-engine.sh"
+else
+    echo "browser/wasm not built yet; run scripts/build-wasm.sh then scripts/sync-engine.sh"
+fi
+
 say "generated web tables"
 python3 scripts/gen-web-tables.py
 

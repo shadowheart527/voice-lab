@@ -173,16 +173,70 @@
 	}
 
 	let sock = null;
-	function connect() {
+	function connectWebSocket() {
 		sock = new WebSocket(FEED_URL);
 		sock.onopen = () => setChip('live');
 		sock.onmessage = onMessage;
 		sock.onclose = () => {
 			setChip('off');
 			dot.style.opacity = '0';
-			setTimeout(connect, 2500);
+			setTimeout(connectWebSocket, 2500);
 		};
 		sock.onerror = () => { try { sock.close(); } catch (e) {} };
 	}
+
+	// The chip doubles as the start control when the engine runs in-page:
+	// microphone access needs a user gesture, so something has to be clicked.
+	function setLive(on) {
+		setChip(on ? 'live' : 'off');
+	}
+
+	function setNeedsStart() {
+		chip.textContent = '▶ tap to start'; chip.style.color = '#8a5cd0';
+		chip.style.cursor = 'pointer';
+		chip.title = 'Click to start listening';
+		chip.addEventListener('click', async () => {
+			if (!localFeed || localFeed.started) return;
+			chip.textContent = '… starting';
+			try {
+				await localFeed.start();
+			} catch (err) {
+				chip.textContent = '○ microphone blocked'; chip.style.color = '#999';
+			}
+		});
+	}
+
+	// Module scripts are deferred, so this classic script runs first: give the
+	// local engine a moment to register before deciding it is absent.
+	function waitForEngine(ms) {
+		if (window.VoiceLabLocalEngine) return Promise.resolve(window.VoiceLabLocalEngine);
+		return new Promise((resolve) => {
+			const done = () => { clearTimeout(timer); resolve(window.VoiceLabLocalEngine || null); };
+			const timer = setTimeout(() => {
+				window.removeEventListener('voicelab-engine-ready', done);
+				resolve(window.VoiceLabLocalEngine || null);
+			}, ms);
+			window.addEventListener('voicelab-engine-ready', done, { once: true });
+		});
+	}
+
+	// Prefer running the engine in this page (works on a phone, needs no
+	// desktop app); fall back to the desktop's WebSocket feed if it is not
+	// built, so the existing desk setup is unaffected.
+	let localFeed = null;
+
+	async function connect() {
+		const local = await waitForEngine(2000);
+		if (local && await local.available) {
+			localFeed = local.create();
+			localFeed.onopen = () => setLive(true);
+			localFeed.onmessage = onMessage;
+			localFeed.onclose = () => setLive(false);
+			setNeedsStart();
+			return;
+		}
+		connectWebSocket();
+	}
+
 	connect();
 })();

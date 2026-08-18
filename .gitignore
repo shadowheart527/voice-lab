@@ -28,3 +28,6 @@ engine/external/eigen/
 # browser/wasm/ IS committed: GitHub Pages cannot cross-compile Emscripten and
 # FFTW, so the built module ships with the repo and the deployed site is
 # guaranteed to be the artifact that was tested. Rebuild with scripts/build-wasm.sh.
+
+# Build output, produced by scripts/sync-engine.sh
+genderspace/engine/
