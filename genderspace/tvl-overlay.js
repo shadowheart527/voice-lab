@@ -8,7 +8,10 @@
 	const TRAIL_SECONDS = 6;
 	// Size-axis anchors in r-space (0 = at the masc formant anchors, 1 = at
 	// the fem anchors). Tune these two if small/large feel off on your mic.
-	const SIZE_LO = 0.0, SIZE_HI = 1.0;
+	// r-space runs past 1.0: measured on the TVL demonstrations, 38% of frames of a
+// fem-of-centre voice sat at or above 1.0, so a ceiling of 1.0 pinned the size
+// readout to 100% and threw away the top of the range.
+const SIZE_LO = 0.0, SIZE_HI = 1.45;
 
 	// Personal weight anchors: every mic chain shifts the tilt scale a few
 	// dB/oct, so ?wlight=-13&wheavy=-5 pins light/heavy to YOUR chain. Do

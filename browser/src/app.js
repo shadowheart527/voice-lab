@@ -258,8 +258,12 @@ async function start() {
             if (m.pitch >= TARGET_MIN && m.pitch <= TARGET_MAX) inBandFrames++;
         }
 
+        // r-space runs past 1.0 for fem-of-centre voices (measured: 38% of
+        // frames of the TVL 'light' demo), so scale by the real ceiling rather
+        // than clamping the top of the range away.
+        const SIZE_HI = 1.45;
         const size = Number.isFinite(m.sizeR) && m.sizeR > -900
-            ? Math.max(0, Math.min(1, m.sizeR)) : null;
+            ? Math.max(0, Math.min(1, m.sizeR / SIZE_HI)) : null;
         m.size = size;   // readouts read it off the measurement
         session.add(m);
         informant.push(m.spectrum || null, m, m.t);
